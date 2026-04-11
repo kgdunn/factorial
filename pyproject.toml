@@ -52,7 +52,12 @@ select = [
     "T20", # flake8-print
     "SIM", # flake8-simplify
 ]
-ignore = ["S101"] # allow assert in tests
+ignore = [
+    "S101",  # allow assert in tests
+    "S104",  # allow binding to all interfaces (0.0.0.0) — intentional for Docker
+    "S105",  # allow default passwords in Settings — overridden by .env in production
+    "B008",  # allow Depends() in function defaults — standard FastAPI pattern
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
