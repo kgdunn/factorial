@@ -10,24 +10,12 @@ import logging
 from typing import Any
 
 from app.services.exceptions import ToolExecutionError
+from app.services.tools import execute_tool_call
 
 logger = logging.getLogger(__name__)
 
 # Maximum time (seconds) a single DOE computation may run before timeout.
 COMPUTATION_TIMEOUT = 300.0
-
-
-# TODO: replace with `from process_improve.tool_spec import execute_tool_call`
-#       once process-improve is available in the deployment environment.
-def _execute_tool_call_stub(tool_name: str, tool_input: dict[str, Any]) -> Any:  # noqa: ANN401, ARG001
-    """Stub — process-improve is not yet available in this deployment."""
-    raise ToolExecutionError(
-        "DOE computation backend (process-improve) is not yet available.",
-        tool_name=tool_name,
-    )
-
-
-execute_tool_call = _execute_tool_call_stub
 
 
 async def call_tool(tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
