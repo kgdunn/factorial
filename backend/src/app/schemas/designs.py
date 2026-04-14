@@ -1,9 +1,53 @@
 """Pydantic schemas for design generation endpoints."""
 
+from enum import StrEnum
 from typing import Any
 
-from process_improve.experiments.factor import Factor
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+# TODO: replace with `from process_improve.experiments.factor import Factor`
+#       once process-improve is available in the deployment environment.
+
+
+class FactorType(StrEnum):
+    """Type of experimental factor."""
+
+    continuous = "continuous"
+    categorical = "categorical"
+    mixture = "mixture"
+
+
+class Factor(BaseModel):
+    """Specification for a single experimental factor.
+
+    Local stub mirroring ``process_improve.experiments.factor.Factor`` so
+    the API schema and request validation remain identical while the
+    process-improve package is not yet deployed.
+    """
+
+    name: str
+    type: FactorType = FactorType.continuous
+    low: float | None = None
+    high: float | None = None
+    levels: list[Any] | None = None
+    units: str = ""
+
+    @model_validator(mode="after")
+    def _validate_factor(self) -> "Factor":
+        if self.type == FactorType.continuous:
+            if self.low is None or self.high is None:
+                raise ValueError(f"Factor '{self.name}': continuous factors require 'low' and 'high'.")
+            if self.low >= self.high:
+                raise ValueError(f"Factor '{self.name}': 'low' ({self.low}) must be less than 'high' ({self.high}).")
+        elif self.type == FactorType.categorical:
+            if not self.levels or len(self.levels) < 2:
+                raise ValueError(f"Factor '{self.name}': categorical factors require 'levels' with at least 2 entries.")
+        elif self.type == FactorType.mixture:
+            if self.low is None:
+                self.low = 0.0
+            if self.high is None:
+                self.high = 1.0
+        return self
 
 # ---------------------------------------------------------------------------
 # Request
