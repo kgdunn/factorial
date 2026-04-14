@@ -34,3 +34,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Node.js
+node_modules/
+.svelte-kit/
+.env.local
+.env.*.local

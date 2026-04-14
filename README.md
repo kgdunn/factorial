@@ -1,30 +1,42 @@
 # Agentic Experimental Design & Analysis
 
-[![CI](https://github.com/kgdunn/agentic-experimental-design-and-analysis/actions/workflows/ci.yml/badge.svg)](https://github.com/kgdunn/agentic-experimental-design-and-analysis/actions/workflows/ci.yml)
+[![CI — Backend](https://github.com/kgdunn/agentic-experimental-design-and-analysis/actions/workflows/ci-backend.yml/badge.svg)](https://github.com/kgdunn/agentic-experimental-design-and-analysis/actions/workflows/ci-backend.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
+[![SvelteKit](https://img.shields.io/badge/SvelteKit-2.0+-FF3E00.svg)](https://kit.svelte.dev)
 [![License: BSD-3](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
 
-Backend API for an AI agent-based web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology. The application uses LLM-powered agents to guide users through experimental design, execute statistical analyses, and present interactive visualizations of results.
+Monorepo for an AI agent-based web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology. Contains the **FastAPI backend** and **SvelteKit frontend**. The application uses LLM-powered agents to guide users through experimental design, execute statistical analyses, and present interactive visualizations of results.
 
 The statistical analysis engine lives in a separate package: [process-improve](https://github.com/kgdunn/process-improve).
+
+## Project Structure
+
+```
+backend/     FastAPI API + PostgreSQL + Neo4j
+frontend/    SvelteKit single-page application
+docs/        Architecture and frontend specs
+```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
+| Frontend | [SvelteKit](https://kit.svelte.dev) + [Svelte 5](https://svelte.dev) |
 | API | [FastAPI](https://fastapi.tiangolo.com) + [Uvicorn](https://www.uvicorn.org) |
 | Database | [PostgreSQL 16](https://www.postgresql.org) via [SQLAlchemy 2.0](https://www.sqlalchemy.org) async |
 | Knowledge Graph | [Neo4j 5 Community](https://neo4j.com) |
 | Migrations | [Alembic](https://alembic.sqlalchemy.org) |
-| Package Manager | [UV](https://docs.astral.sh/uv/) |
-| Linting | [ruff](https://docs.astral.sh/ruff/) |
+| Backend Package Manager | [UV](https://docs.astral.sh/uv/) |
+| Frontend Package Manager | npm |
+| Linting | [ruff](https://docs.astral.sh/ruff/) (backend) |
 | Containers | Docker + Docker Compose |
 | CI/CD | GitHub Actions |
 
 ## Prerequisites
 
 - [UV](https://docs.astral.sh/uv/getting-started/installation/) (Python package manager)
+- [Node.js 22+](https://nodejs.org/) and npm
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (for databases and deployment)
 - Python 3.12+ (UV will install this automatically)
 
@@ -38,19 +50,27 @@ cd agentic-experimental-design-and-analysis
 # Copy the environment template
 cp .env.example .env
 
-# Install dependencies
+# Install backend dependencies
 make install
 
-# Start the development server (hot-reload)
+# Start the backend dev server (hot-reload on port 8000)
 make debug
 ```
 
 The API will be available at `http://localhost:8000`. Visit `http://localhost:8000/docs` for the interactive Swagger UI.
 
-### With Databases (Docker)
+```bash
+# Install frontend dependencies
+make frontend-install
+
+# Start the frontend dev server (port 5173)
+make frontend-dev
+```
+
+### Full Stack (Docker)
 
 ```bash
-# Start all services (FastAPI + PostgreSQL + Neo4j)
+# Start all services (backend + frontend + PostgreSQL + Neo4j)
 make deploy
 
 # Run database migrations
@@ -58,7 +78,7 @@ make migrate
 
 # Check service health
 curl http://localhost:8000/api/v1/health
-curl http://localhost:8000/api/v1/health/ready
+curl http://localhost:3000
 
 # Tear everything down
 make clean
@@ -68,14 +88,17 @@ make clean
 
 | Command | Description |
 |---------|-------------|
-| `make install` | Install all dependencies (main + dev) via UV |
-| `make debug` | Start uvicorn with hot-reload on port 8000 |
+| `make install` | Install backend dependencies (main + dev) via UV |
+| `make debug` | Start backend with hot-reload on port 8000 |
+| `make lint` | Check backend code with ruff (read-only) |
+| `make format` | Auto-fix backend lint issues and format code |
+| `make test` | Run backend test suite with pytest |
+| `make migrate` | Apply database migrations with Alembic |
+| `make frontend-install` | Install frontend npm dependencies |
+| `make frontend-dev` | Start SvelteKit dev server on port 5173 |
+| `make frontend-build` | Build frontend for production |
 | `make deploy` | Build and start all Docker services |
 | `make clean` | Stop containers, remove volumes, clear caches |
-| `make lint` | Check code with ruff (read-only) |
-| `make format` | Auto-fix lint issues and format code |
-| `make test` | Run test suite with pytest |
-| `make migrate` | Apply database migrations with Alembic |
 
 ## Architecture
 
@@ -97,11 +120,20 @@ make clean
     │ Postgres │             │   Neo4j   │
     │   16     │             │ Community │
     └─────────┘             └───────────┘
+
+┌─────────────────────────────────────────────────────┐
+│              SvelteKit (Static Adapter)              │
+│  ┌───────────┐  ┌───────────┐  ┌────────────────┐  │
+│  │ Routes    │  │ Components│  │ Stores         │  │
+│  │ (pages)   │  │ (Svelte5) │  │ (state mgmt)  │  │
+│  └───────────┘  └───────────┘  └────────────────┘  │
+│                      │                               │
+│              fetch /api/v1/*                          │
+└─────────────────────┼───────────────────────────────┘
+                      │ HTTP
+                      ▼
+              FastAPI backend
 ```
-
-### API Versioning
-
-All endpoints are under `/api/v1/`. When breaking changes are needed, a `/api/v2/` prefix will be introduced alongside v1 for backwards compatibility.
 
 ### Health Endpoints
 
@@ -131,8 +163,8 @@ make format
 ### Adding a Database Migration
 
 ```bash
-# After modifying SQLAlchemy models in src/app/models/:
-uv run alembic revision --autogenerate -m "description of change"
+# After modifying SQLAlchemy models in backend/src/app/models/:
+cd backend && uv run alembic revision --autogenerate -m "description of change"
 
 # Apply the migration:
 make migrate

@@ -2,8 +2,7 @@
 name = "agentic-experimental-design-and-analysis"
 version = "0.2.0"
 description = "Backend for AI agent-based Design of Experiments analysis"
-readme = "README.md"
-license = { file = "LICENSE" }
+license = { text = "BSD-3-Clause" }
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",

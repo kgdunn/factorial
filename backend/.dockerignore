@@ -1,4 +1,3 @@
-.git/
 .venv/
 __pycache__/
 *.pyc
@@ -6,13 +5,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-.github/
 tests/
-# Exclude markdown files except README.md (referenced by pyproject.toml)
 *.md
 !README.md
 .dockerignore
-docker-compose.yml
 .idea/
 .vscode/
 htmlcov/
