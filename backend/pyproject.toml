@@ -15,7 +15,6 @@ dependencies = [
     "alembic>=1.14.0",
     "neo4j>=5.26.0",
     "httpx>=0.28.0",
-    "process-improve>=1.2.7",
 ]
 
 [project.optional-dependencies]
