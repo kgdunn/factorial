@@ -521,7 +521,7 @@ async def run_chat(
 
             # 5. Launch agent loop in a thread.
             event_queue: queue.Queue[_QueueItem] = queue.Queue()
-            tool_specs = get_tool_specs()
+            tool_specs = [{k: v for k, v in s.items() if k != "category"} for s in get_tool_specs()]
 
             try:
                 client = get_anthropic_client()
