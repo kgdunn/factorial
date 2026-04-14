@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "neo4j_password"
 
+    # Anthropic
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-20250514"
+
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
