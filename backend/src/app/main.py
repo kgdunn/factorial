@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Agentic Experimental Design & Analysis",
     description="Backend API for AI agent-based Design of Experiments",
-    version="0.2.0",
+    version="0.2.1",
     lifespan=lifespan,
 )
 
