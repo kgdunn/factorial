@@ -1,4 +1,4 @@
-"""Tests for the tool registry and stub tools."""
+"""Tests for the tool bridge (process-improve integration)."""
 
 import pytest
 
@@ -7,15 +7,9 @@ from app.services.tools import execute_tool_call, get_tool_specs
 
 
 class TestGetToolSpecs:
-    def test_returns_both_tools(self):
+    def test_returns_all_registered_tools(self):
         specs = get_tool_specs()
-        names = {s["name"] for s in specs}
-        assert "create_design" in names
-        assert "analyze_results" in names
-
-    def test_spec_count(self):
-        specs = get_tool_specs()
-        assert len(specs) == 2
+        assert len(specs) >= 30  # 31 tools at time of writing; >= allows growth
 
     def test_spec_format_matches_anthropic_schema(self):
         """Each spec must have name, description, and input_schema (JSON Schema object)."""
@@ -27,101 +21,64 @@ class TestGetToolSpecs:
             assert schema["type"] == "object"
             assert "properties" in schema
 
+    def test_contains_key_tools(self):
+        names = {s["name"] for s in get_tool_specs()}
+        assert "generate_design" in names
+        assert "analyze_experiment" in names
+        assert "robust_summary_stats" in names
+        assert "fit_pca" in names
 
-class TestCreateDesignStub:
-    def test_basic_two_factor(self):
+    def test_category_filter(self):
+        specs = get_tool_specs(category="experiments")
+        assert len(specs) >= 8
+        for spec in specs:
+            assert spec.get("category") == "experiments"
+
+    def test_names_filter(self):
+        specs = get_tool_specs(names=["generate_design", "robust_summary_stats"])
+        names = {s["name"] for s in specs}
+        assert names == {"generate_design", "robust_summary_stats"}
+
+
+class TestExecuteToolCall:
+    def test_robust_summary_stats(self):
         result = execute_tool_call(
-            "create_design",
+            "robust_summary_stats",
+            {"values": [1.0, 2.0, 3.0, 4.0, 5.0]},
+        )
+        assert "mean" in result
+        assert "median" in result
+        assert result["N_non_missing"] == 5
+        assert result["median"] == 3.0
+
+    def test_generate_design(self):
+        result = execute_tool_call(
+            "generate_design",
             {
                 "factors": [
                     {"name": "Temperature", "low": 150.0, "high": 200.0},
                     {"name": "Pressure", "low": 1.0, "high": 5.0},
                 ],
+                "design_type": "full_factorial",
             },
         )
         assert result["design_type"] == "full_factorial"
         assert result["n_factors"] == 2
-        assert result["n_runs"] == 4
-        assert result["factor_names"] == ["Temperature", "Pressure"]
-        assert len(result["design_coded"]) == 4
-        assert len(result["design_actual"]) == 4
-        assert len(result["run_order"]) == 4
+        assert result["n_runs"] >= 4
+        assert "design_coded" in result
+        assert "design_actual" in result
 
-    def test_three_factor(self):
+    def test_error_dict_from_tool(self):
+        """Tools that catch errors internally return {\"error\": ...} dicts."""
         result = execute_tool_call(
-            "create_design",
+            "generate_design",
             {
-                "factors": [
-                    {"name": "A", "low": 0.0, "high": 1.0},
-                    {"name": "B", "low": 0.0, "high": 1.0},
-                    {"name": "C", "low": 0.0, "high": 1.0},
-                ],
-                "design_type": "ccd",
+                "factors": [{"name": "A", "low": 0.0, "high": 1.0}],
+                "design_type": "box_behnken",
             },
         )
-        assert result["n_factors"] == 3
-        assert result["n_runs"] == 8  # 2^3 for stub
-        assert result["design_type"] == "ccd"
-
-    def test_actual_values_use_factor_bounds(self):
-        result = execute_tool_call(
-            "create_design",
-            {
-                "factors": [
-                    {"name": "Temp", "low": 100.0, "high": 200.0},
-                ],
-            },
-        )
-        actual_values = {row["Temp"] for row in result["design_actual"]}
-        assert actual_values == {100.0, 200.0}
-
-    def test_coded_values_are_minus_one_plus_one(self):
-        result = execute_tool_call(
-            "create_design",
-            {
-                "factors": [{"name": "X", "low": 0, "high": 10}],
-            },
-        )
-        coded_values = {row["X"] for row in result["design_coded"]}
-        assert coded_values == {-1, 1}
-
-
-class TestAnalyzeResultsStub:
-    def test_basic_analysis(self):
-        result = execute_tool_call(
-            "analyze_results",
-            {
-                "factor_names": ["Temperature", "Pressure"],
-                "model_type": "linear",
-            },
-        )
-        assert result["model_type"] == "linear"
-        assert "r_squared" in result
-        assert "adj_r_squared" in result
-        assert "coefficients" in result
-        assert "intercept" in result
-        assert "p_values" in result
-        assert "significant_factors" in result
-        assert "anova" in result
-        assert "diagnostics" in result
-
-    def test_coefficients_match_factors(self):
-        names = ["A", "B", "C"]
-        result = execute_tool_call("analyze_results", {"factor_names": names})
-        assert set(result["coefficients"].keys()) == set(names)
-        assert set(result["p_values"].keys()) == set(names)
-
-    def test_anova_has_required_fields(self):
-        result = execute_tool_call("analyze_results", {"factor_names": ["X"]})
-        anova = result["anova"]
-        assert "f_statistic" in anova
-        assert "p_value" in anova
-        assert "df_model" in anova
-        assert "df_residual" in anova
-
-    def test_defaults_when_optional_fields_omitted(self):
-        result = execute_tool_call("analyze_results", {"factor_names": ["X1", "X2"]})
-        assert result["model_type"] == "linear"
+        assert isinstance(result, dict)
+        assert "error" in result
 
 
 class TestExecuteToolCallErrors:
