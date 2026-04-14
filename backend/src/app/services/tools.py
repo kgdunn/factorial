@@ -77,7 +77,7 @@ def _handle_create_design(tool_input: dict[str, Any]) -> dict[str, Any]:
     coded_levels = list(itertools.product([-1, 1], repeat=n_factors))
     n_runs = len(coded_levels)
 
-    design_coded = [dict(zip(factor_names, row)) for row in coded_levels]
+    design_coded = [dict(zip(factor_names, row, strict=True)) for row in coded_levels]
 
     # Build actual-units matrix using factor low/high (or defaults)
     design_actual = []
@@ -90,7 +90,7 @@ def _handle_create_design(tool_input: dict[str, Any]) -> dict[str, Any]:
         design_actual.append(actual_row)
 
     run_order = list(range(1, n_runs + 1))
-    random.Random(42).shuffle(run_order)
+    random.Random(42).shuffle(run_order)  # noqa: S311 — deterministic stub data, not crypto
 
     return {
         "design_type": design_type,
@@ -179,7 +179,7 @@ def _handle_analyze_results(tool_input: dict[str, Any]) -> dict[str, Any]:
     factor_names = tool_input.get("factor_names", ["X1", "X2"])
     model_type = tool_input.get("model_type", "linear")
 
-    rng = random.Random(42)
+    rng = random.Random(42)  # noqa: S311 — deterministic stub data, not crypto
     coefficients = {name: round(rng.uniform(-3.0, 3.0), 3) for name in factor_names}
     p_values = {name: round(rng.uniform(0.001, 0.15), 4) for name in factor_names}
     significant = [name for name, p in p_values.items() if p < 0.05]

@@ -28,9 +28,9 @@ def parse_sse_events(body: str) -> list[dict[str, str]]:
     current: dict[str, str] = {}
     for line in body.splitlines():
         if line.startswith("event:"):
-            current["event"] = line[len("event:"):].strip()
+            current["event"] = line[len("event:") :].strip()
         elif line.startswith("data:"):
-            current["data"] = line[len("data:"):].strip()
+            current["data"] = line[len("data:") :].strip()
         elif line == "" and current:
             events.append(current)
             current = {}
@@ -91,7 +91,7 @@ class MockStreamManager:
         self._responses = responses
         self._call_count = 0
 
-    def __call__(self, **kwargs: Any) -> "MockStreamContext":
+    def __call__(self, **kwargs: Any) -> MockStreamContext:
         idx = min(self._call_count, len(self._responses) - 1)
         ctx = MockStreamContext(self._responses[idx])
         self._call_count += 1
@@ -104,7 +104,7 @@ class MockStreamContext:
     def __init__(self, response: MockResponse) -> None:
         self._response = response
 
-    def __enter__(self) -> "MockStreamContext":
+    def __enter__(self) -> MockStreamContext:
         return self
 
     def __exit__(self, *args: Any) -> None:
@@ -156,8 +156,10 @@ class TestChatEndpointMocked:
         )
         mock_client = _make_mock_client([mock_response])
 
-        with patch("app.services.agent_service.get_anthropic_client", return_value=mock_client), \
-             patch("app.services.agent_service.async_session_factory") as mock_sf:
+        with (
+            patch("app.services.agent_service.get_anthropic_client", return_value=mock_client),
+            patch("app.services.agent_service.async_session_factory") as mock_sf,
+        ):
             # Provide a no-op async session.
             mock_sf.return_value = _NoOpAsyncSession()
 
@@ -196,8 +198,10 @@ class TestChatEndpointMocked:
         )
         mock_client = _make_mock_client([tool_response, summary_response])
 
-        with patch("app.services.agent_service.get_anthropic_client", return_value=mock_client), \
-             patch("app.services.agent_service.async_session_factory") as mock_sf:
+        with (
+            patch("app.services.agent_service.get_anthropic_client", return_value=mock_client),
+            patch("app.services.agent_service.async_session_factory") as mock_sf,
+        ):
             mock_sf.return_value = _NoOpAsyncSession()
 
             transport = ASGITransport(app=app)
@@ -227,8 +231,10 @@ class TestChatEndpointMocked:
     @pytest.mark.asyncio
     async def test_missing_api_key_returns_error_event(self):
         """When ANTHROPIC_API_KEY is empty, an error SSE event is emitted."""
-        with patch("app.services.agent_service.settings") as mock_settings, \
-             patch("app.services.agent_service.async_session_factory") as mock_sf:
+        with (
+            patch("app.services.agent_service.settings") as mock_settings,
+            patch("app.services.agent_service.async_session_factory") as mock_sf,
+        ):
             mock_settings.anthropic_api_key = ""
             mock_settings.anthropic_model = "claude-sonnet-4-20250514"
             mock_sf.return_value = _NoOpAsyncSession()
@@ -268,6 +274,7 @@ class _NoOpAsyncSession:
         # Assign a fake id if the object needs one.
         if hasattr(obj, "id") and obj.id is None:
             import uuid
+
             obj.id = uuid.uuid4()
 
     async def flush(self) -> None:
@@ -282,12 +289,12 @@ class _NoOpAsyncSession:
     async def get(self, model: Any, id: Any) -> None:
         return None
 
-    async def execute(self, stmt: Any) -> "_NoOpResult":
+    async def execute(self, stmt: Any) -> _NoOpResult:
         return _NoOpResult()
 
 
 class _NoOpResult:
-    def scalars(self) -> "_NoOpResult":
+    def scalars(self) -> _NoOpResult:
         return self
 
     def all(self) -> list:

@@ -155,12 +155,14 @@ def _run_agent_loop(
                 if block.type == "text":
                     content_dicts.append({"type": "text", "text": block.text})
                 elif block.type == "tool_use":
-                    content_dicts.append({
-                        "type": "tool_use",
-                        "id": block.id,
-                        "name": block.name,
-                        "input": block.input,
-                    })
+                    content_dicts.append(
+                        {
+                            "type": "tool_use",
+                            "id": block.id,
+                            "name": block.name,
+                            "input": block.input,
+                        }
+                    )
 
             assistant_msg = {"role": "assistant", "content": content_dicts, "_meta": response_meta}
             messages.append({"role": "assistant", "content": response.content})
@@ -192,39 +194,52 @@ def _run_agent_loop(
                     result = execute_tool_call(tool_block.name, tool_block.input)
                     duration_ms = int((time.perf_counter() - t0) * 1000)
 
-                    record.update({
-                        "tool_output": result,
-                        "status": "success",
-                        "completed_at": datetime.now(UTC),
-                        "duration_ms": duration_ms,
-                    })
+                    record.update(
+                        {
+                            "tool_output": result,
+                            "status": "success",
+                            "completed_at": datetime.now(UTC),
+                            "duration_ms": duration_ms,
+                        }
+                    )
 
                     event_queue.put(("tool_result", {"tool": tool_block.name, "output": result}))
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_block.id,
-                        "content": json.dumps(result),
-                    })
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_block.id,
+                            "content": json.dumps(result),
+                        }
+                    )
 
                 except ToolExecutionError as exc:
                     duration_ms = int((time.perf_counter() - t0) * 1000)
-                    record.update({
-                        "status": "error",
-                        "error_message": exc.message,
-                        "completed_at": datetime.now(UTC),
-                        "duration_ms": duration_ms,
-                    })
+                    record.update(
+                        {
+                            "status": "error",
+                            "error_message": exc.message,
+                            "completed_at": datetime.now(UTC),
+                            "duration_ms": duration_ms,
+                        }
+                    )
 
-                    event_queue.put(("tool_result", {
-                        "tool": tool_block.name,
-                        "output": {"error": exc.message},
-                    }))
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_block.id,
-                        "content": json.dumps({"error": exc.message}),
-                        "is_error": True,
-                    })
+                    event_queue.put(
+                        (
+                            "tool_result",
+                            {
+                                "tool": tool_block.name,
+                                "output": {"error": exc.message},
+                            },
+                        )
+                    )
+                    tool_results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_block.id,
+                            "content": json.dumps({"error": exc.message}),
+                            "is_error": True,
+                        }
+                    )
 
                 tool_call_records.append(record)
 
@@ -412,8 +427,8 @@ async def _persist_new_messages(
             seq += 1
 
         # Accumulate token counts on the conversation.
-        conversation.total_input_tokens += meta.get("input_tokens", 0)
-        conversation.total_output_tokens += meta.get("output_tokens", 0)
+        conversation.total_input_tokens = (conversation.total_input_tokens or 0) + meta.get("input_tokens", 0)
+        conversation.total_output_tokens = (conversation.total_output_tokens or 0) + meta.get("output_tokens", 0)
 
     return tool_use_id_to_msg_id
 
@@ -467,9 +482,7 @@ async def run_chat(
                     yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
                     return
                 result = await db.execute(
-                    select(Message)
-                    .where(Message.conversation_id == conversation_id)
-                    .order_by(Message.sequence)
+                    select(Message).where(Message.conversation_id == conversation_id).order_by(Message.sequence)
                 )
                 history_rows = list(result.scalars().all())
                 api_messages = _build_messages_from_history(history_rows)
@@ -479,6 +492,9 @@ async def run_chat(
                     title=message[:100],
                     model_key=settings.anthropic_model,
                     system_prompt=SYSTEM_PROMPT,
+                    total_input_tokens=0,
+                    total_output_tokens=0,
+                    message_count=0,
                 )
                 db.add(conversation)
                 await db.flush()
@@ -493,7 +509,7 @@ async def run_chat(
                 sequence=next_seq,
             )
             db.add(user_msg)
-            conversation.message_count += 1
+            conversation.message_count = (conversation.message_count or 0) + 1
             await db.flush()
             next_seq += 1
 
@@ -544,7 +560,7 @@ async def run_chat(
                 content = m.get("content", [])
                 if isinstance(content, list):
                     msg_count += len(content) - 1  # each block is a row
-            conversation.message_count += msg_count
+            conversation.message_count = (conversation.message_count or 0) + msg_count
 
             await db.commit()
 

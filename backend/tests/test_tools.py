@@ -30,12 +30,15 @@ class TestGetToolSpecs:
 
 class TestCreateDesignStub:
     def test_basic_two_factor(self):
-        result = execute_tool_call("create_design", {
-            "factors": [
-                {"name": "Temperature", "low": 150.0, "high": 200.0},
-                {"name": "Pressure", "low": 1.0, "high": 5.0},
-            ],
-        })
+        result = execute_tool_call(
+            "create_design",
+            {
+                "factors": [
+                    {"name": "Temperature", "low": 150.0, "high": 200.0},
+                    {"name": "Pressure", "low": 1.0, "high": 5.0},
+                ],
+            },
+        )
         assert result["design_type"] == "full_factorial"
         assert result["n_factors"] == 2
         assert result["n_runs"] == 4
@@ -45,41 +48,53 @@ class TestCreateDesignStub:
         assert len(result["run_order"]) == 4
 
     def test_three_factor(self):
-        result = execute_tool_call("create_design", {
-            "factors": [
-                {"name": "A", "low": 0.0, "high": 1.0},
-                {"name": "B", "low": 0.0, "high": 1.0},
-                {"name": "C", "low": 0.0, "high": 1.0},
-            ],
-            "design_type": "ccd",
-        })
+        result = execute_tool_call(
+            "create_design",
+            {
+                "factors": [
+                    {"name": "A", "low": 0.0, "high": 1.0},
+                    {"name": "B", "low": 0.0, "high": 1.0},
+                    {"name": "C", "low": 0.0, "high": 1.0},
+                ],
+                "design_type": "ccd",
+            },
+        )
         assert result["n_factors"] == 3
         assert result["n_runs"] == 8  # 2^3 for stub
         assert result["design_type"] == "ccd"
 
     def test_actual_values_use_factor_bounds(self):
-        result = execute_tool_call("create_design", {
-            "factors": [
-                {"name": "Temp", "low": 100.0, "high": 200.0},
-            ],
-        })
+        result = execute_tool_call(
+            "create_design",
+            {
+                "factors": [
+                    {"name": "Temp", "low": 100.0, "high": 200.0},
+                ],
+            },
+        )
         actual_values = {row["Temp"] for row in result["design_actual"]}
         assert actual_values == {100.0, 200.0}
 
     def test_coded_values_are_minus_one_plus_one(self):
-        result = execute_tool_call("create_design", {
-            "factors": [{"name": "X", "low": 0, "high": 10}],
-        })
+        result = execute_tool_call(
+            "create_design",
+            {
+                "factors": [{"name": "X", "low": 0, "high": 10}],
+            },
+        )
         coded_values = {row["X"] for row in result["design_coded"]}
         assert coded_values == {-1, 1}
 
 
 class TestAnalyzeResultsStub:
     def test_basic_analysis(self):
-        result = execute_tool_call("analyze_results", {
-            "factor_names": ["Temperature", "Pressure"],
-            "model_type": "linear",
-        })
+        result = execute_tool_call(
+            "analyze_results",
+            {
+                "factor_names": ["Temperature", "Pressure"],
+                "model_type": "linear",
+            },
+        )
         assert result["model_type"] == "linear"
         assert "r_squared" in result
         assert "adj_r_squared" in result

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -105,7 +105,7 @@ class Message(Base):
     model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
     stop_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    extra: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
 
     # Timestamps
     created_at: Mapped[str] = mapped_column(
