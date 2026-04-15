@@ -1,6 +1,6 @@
 [project]
-name = "agentic-experimental-design-and-analysis"
-version = "0.3.8"
+name = "agentic-doe"
+version = "0.3.9"
 description = "Backend for AI agent-based Design of Experiments analysis"
 license = { text = "BSD-3-Clause" }
 requires-python = ">=3.11"
