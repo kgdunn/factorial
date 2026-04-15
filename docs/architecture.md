@@ -23,7 +23,7 @@ This project uses a monorepo (`backend/` + `frontend/`) rather than separate rep
 
 ### Why monorepo over separate repos
 
-- **Single docker-compose** deploys both services. One `git pull && docker compose up --build` on the Hetzner VPS.
+- **Single docker-compose** deploys both services. One `git pull && docker compose up --build` on the VPS.
 - **One git clone for full context** — AI agents (and humans) see the entire system without cross-repo coordination. No need to tell the agent "look here for the backend, look there for the frontend."
 - **API contract co-evolution** — when a backend response schema changes, the frontend fetch call updates in the same PR. No version coordination dance.
 - **The project is small-team/solo** — separate repos add CI/versioning/deploy overhead without the team-boundary benefits that justify them at scale.
@@ -36,7 +36,7 @@ This project uses a monorepo (`backend/` + `frontend/`) rather than separate rep
 
 ### Deployment simplicity
 
-- Target is a single **Hetzner VPS** running docker-compose.
+- Target is a single **Linux VPS** running docker-compose.
 - Graduation path to separate services (container orchestration, CDN for static assets) doesn't require repo separation — just separate Dockerfiles (which we already have).
 
 ## Tech Stack
@@ -128,7 +128,7 @@ Statistical process control.
 
 ## Deployment Target
 
-**Hetzner VPS** running docker-compose. Single server for MVP.
+**Linux VPS** running docker-compose. Single server for MVP.
 
 Graduation path:
 - Phase 1 (MVP): Single VPS with docker-compose

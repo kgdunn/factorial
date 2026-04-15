@@ -1,8 +1,9 @@
 services:
   app:
     build: ./backend
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -16,19 +17,21 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       - app
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-doe_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-doe_password}
       POSTGRES_DB: ${POSTGRES_DB:-doe_db}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -39,11 +42,12 @@ services:
 
   neo4j:
     image: neo4j:5-community
+    restart: unless-stopped
     environment:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-neo4j_password}
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - neo4j_data:/data
     healthcheck:
@@ -56,8 +60,9 @@ services:
   # Redis — uncomment when needed for sessions/caching
   # redis:
   #   image: redis:7-alpine
+  #   restart: unless-stopped
   #   ports:
-  #     - "6379:6379"
+  #     - "127.0.0.1:6379:6379"
   #   volumes:
   #     - redis_data:/data
   #   healthcheck:

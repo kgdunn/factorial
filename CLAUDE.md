@@ -28,7 +28,7 @@ For frontend UI/UX spec (pages, components, streaming protocol), see `docs/front
 | Testing | pytest + pytest-asyncio (backend), vitest (frontend) |
 | Containerization | Docker + docker-compose |
 | CI/CD | GitHub Actions |
-| Deployment target | Hetzner VPS with docker-compose |
+| Deployment target | Linux VPS with docker-compose |
 
 ## Project Structure
 
