@@ -1,5 +1,8 @@
 # Deployment Guide: Agentic DOE App
 
+!!! info "Canonical deployment"
+    The production instance of this application runs at **[factori.al](https://factori.al)**. The instructions below are written generically so you can deploy to your own domain.
+
 Deploy the monorepo (FastAPI + SvelteKit + PostgreSQL + Neo4j) to any Linux VPS or cloud server running Ubuntu 24.04. Recommended minimum: 4 vCPU, 8GB RAM. All services are containerized via `docker-compose.yml`.
 
 **Architecture overview:**
@@ -414,7 +417,7 @@ At your domain registrar, create an A record:
 |------|------|-------|-----|
 | A | `@` or subdomain | `<YOUR_SERVER_IP>` | 300 |
 
-Verify: `dig yourdomain.com`
+Verify: `dig yourdomain.com` (for the canonical deployment, the domain is `factori.al`)
 
 ### 10.2 — Update the Caddyfile
 

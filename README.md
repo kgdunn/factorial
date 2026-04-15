@@ -1,10 +1,13 @@
 # Agentic Experimental Design & Analysis
 
+[![Live at factori.al](https://img.shields.io/badge/live-factori.al-blue?style=for-the-badge)](https://factori.al)
 [![CI — Backend](https://github.com/kgdunn/agentic-experimental-design-and-analysis/actions/workflows/ci-backend.yml/badge.svg)](https://github.com/kgdunn/agentic-experimental-design-and-analysis/actions/workflows/ci-backend.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-2.0+-FF3E00.svg)](https://kit.svelte.dev)
 [![License: BSD-3](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
+
+> **This is the open-source codebase behind [factori.al](https://factori.al)** — try it live, or clone the repo and self-host your own instance.
 
 AI agent-based web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology. The agent (powered by Claude) guides users through experimental design, executes statistical analyses, and presents interactive visualizations.
 

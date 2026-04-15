@@ -1,5 +1,8 @@
 # Agentic Experimental Design & Analysis
 
+!!! tip "Try it live"
+    This project powers **[factori.al](https://factori.al)** — use it right away, or follow the guides below to self-host your own instance.
+
 AI agent-based web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology. The agent (powered by Claude) guides users through experimental design, executes statistical analyses, and presents interactive visualizations.
 
 The statistical analysis engine lives in a separate package: [process-improve](https://github.com/kgdunn/process-improve).
