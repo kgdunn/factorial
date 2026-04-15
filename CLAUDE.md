@@ -121,7 +121,7 @@ repo-root/
 |---------|-------------|
 | `make install` | Install backend dependencies (main + dev) via UV |
 | `make debug` | Start uvicorn with hot-reload on port 8000 |
-| `make deploy` | Build and start all Docker services (backend + frontend + databases) |
+| `make deploy` | Full deploy: lint, test, build Docker images, start all services, run migrations |
 | `make clean` | Tear down Docker services, remove caches (Python + Node) |
 | `make lint` | Check backend code with ruff (no modifications) |
 | `make format` | Auto-fix backend lint issues and format code |
