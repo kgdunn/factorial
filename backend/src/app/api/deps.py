@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hmac
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
@@ -39,6 +39,7 @@ class AuthUser:
     display_name: str | None = None
     background: str | None = None
     is_active: bool = True
+    is_service_account: bool = field(default=False)
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +67,7 @@ def _testing_user() -> AuthUser:
         id=TESTING_USER_ID,
         email="test@example.com",
         display_name="Test User",
+        is_service_account=True,
     )
 
 
@@ -75,6 +77,7 @@ def _service_user() -> AuthUser:
         id=SERVICE_USER_ID,
         email="service@internal",
         display_name="Service Account",
+        is_service_account=True,
     )
 
 
@@ -86,14 +89,7 @@ def _service_user() -> AuthUser:
 async def require_api_key(
     api_key: str | None = Security(_api_key_header),
 ) -> str:
-    """Validate the ``X-API-Key`` header against the configured secret.
-
-    Bypassed when ``APP_ENV=testing`` so existing tests pass without
-    sending an API key.
-    """
-    if settings.app_env == "testing":
-        return "testing-bypass"
-
+    """Validate the ``X-API-Key`` header against the configured secret."""
     if not settings.api_secret_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -163,14 +159,9 @@ async def require_auth(
     Returns an ``AuthUser`` in both cases:
     - JWT auth: built from the real database user.
     - API key auth: a synthetic "service" user.
-    - Testing: a synthetic test user.
 
     Raises 401 if neither authentication method succeeds.
     """
-    # Testing bypass
-    if settings.app_env == "testing":
-        return _testing_user()
-
     # JWT auth succeeded
     if jwt_user is not None:
         return jwt_user

@@ -53,7 +53,7 @@ Your expertise covers:
 When a user describes their experimental problem:
 1. Ask clarifying questions if the problem is under-specified.
 2. Recommend an appropriate design strategy with reasoning.
-3. Use the available tools to create designs or analyse results — do not \
+3. Use the available tools to create designs or analyse results \u2014 do not \
    fabricate numerical outputs yourself.
 4. Explain results in plain language, highlighting which factors matter \
    and what to do next.
@@ -61,6 +61,20 @@ When a user describes their experimental problem:
 Always explain your reasoning before calling a tool, and summarise the \
 results after receiving tool output.
 """
+
+# Allowed background values that may be interpolated into the system prompt.
+_ALLOWED_BACKGROUNDS = frozenset(
+    {
+        "chemical_engineer",
+        "pharmaceutical_scientist",
+        "food_scientist",
+        "academic_researcher",
+        "quality_engineer",
+        "data_scientist",
+        "student",
+        "other",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -476,8 +490,12 @@ async def _create_experiment_from_design(
 
 
 def _build_system_prompt(user_background: str | None) -> str:
-    """Build the system prompt, optionally personalised with user background."""
-    if user_background:
+    """Build the system prompt, optionally personalised with user background.
+
+    The background value is validated against an allowlist to prevent
+    prompt injection via the user profile field.
+    """
+    if user_background and user_background in _ALLOWED_BACKGROUNDS:
         bg_label = user_background.replace("_", " ")
         return (
             f"{SYSTEM_PROMPT}\n\n"
@@ -513,17 +531,8 @@ async def run_chat(
                 if not conversation:
                     yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
                     return
-                # Ownership check: non-service users can only access their own conversations.
-                _bypass_ids = {
-                    "00000000-0000-0000-0000-000000000000",
-                    "00000000-0000-0000-0000-000000000001",
-                }
-                if (
-                    user_id
-                    and conversation.user_id
-                    and conversation.user_id != user_id
-                    and str(user_id) not in _bypass_ids
-                ):
+                # Ownership check: only service accounts can access other users' conversations.
+                if user_id and conversation.user_id and conversation.user_id != user_id:
                     yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
                     return
                 result = await db.execute(

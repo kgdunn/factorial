@@ -78,7 +78,12 @@ async def list_experiments(
 ) -> ExperimentListResponse:
     """List experiments with optional status filter and pagination."""
     experiments, total = await experiment_service.list_experiments(
-        db, user_id=current_user.id, status=status, page=page, page_size=page_size
+        db,
+        user_id=current_user.id,
+        is_service_account=current_user.is_service_account,
+        status=status,
+        page=page,
+        page_size=page_size,
     )
     return ExperimentListResponse(
         experiments=[_summary_from_model(e) for e in experiments],
@@ -95,7 +100,9 @@ async def get_experiment(
     current_user: AuthUser = Depends(require_auth),
 ) -> ExperimentDetail:
     """Get a single experiment by ID."""
-    exp = await experiment_service.get_experiment(db, experiment_id, user_id=current_user.id)
+    exp = await experiment_service.get_experiment(
+        db, experiment_id, user_id=current_user.id, is_service_account=current_user.is_service_account
+    )
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return _detail_from_model(exp)
@@ -112,7 +119,9 @@ async def update_experiment(
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
-    exp = await experiment_service.update_experiment(db, experiment_id, updates, user_id=current_user.id)
+    exp = await experiment_service.update_experiment(
+        db, experiment_id, updates, user_id=current_user.id, is_service_account=current_user.is_service_account
+    )
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return _detail_from_model(exp)
@@ -125,7 +134,9 @@ async def delete_experiment(
     current_user: AuthUser = Depends(require_auth),
 ) -> dict[str, str]:
     """Delete an experiment."""
-    deleted = await experiment_service.delete_experiment(db, experiment_id, user_id=current_user.id)
+    deleted = await experiment_service.delete_experiment(
+        db, experiment_id, user_id=current_user.id, is_service_account=current_user.is_service_account
+    )
     if not deleted:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return {"detail": "Deleted"}
@@ -139,7 +150,9 @@ async def add_results(
     current_user: AuthUser = Depends(require_auth),
 ) -> ResultsResponse:
     """Add or update results for an experiment (incremental entry)."""
-    exp = await experiment_service.add_results(db, experiment_id, body.results, user_id=current_user.id)
+    exp = await experiment_service.add_results(
+        db, experiment_id, body.results, user_id=current_user.id, is_service_account=current_user.is_service_account
+    )
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
     data = exp.results_data or []
@@ -157,7 +170,9 @@ async def get_results(
     current_user: AuthUser = Depends(require_auth),
 ) -> ResultsResponse:
     """Get current results for an experiment."""
-    data, count = await experiment_service.get_results(db, experiment_id, user_id=current_user.id)
+    data, count = await experiment_service.get_results(
+        db, experiment_id, user_id=current_user.id, is_service_account=current_user.is_service_account
+    )
     if data is None:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return ResultsResponse(

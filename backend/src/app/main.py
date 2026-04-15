@@ -17,6 +17,9 @@ from app.services.exceptions import ToolExecutionError
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast if production secrets are missing or weak.
+    settings.validate_production_secrets()
+
     # Startup: verify database connections (skip in testing)
     if settings.app_env != "testing":
         async with engine.begin() as conn:

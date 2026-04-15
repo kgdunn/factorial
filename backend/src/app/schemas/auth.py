@@ -4,8 +4,22 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
+
+# Allowlist of valid user background values. Free-text is not permitted
+# because the value is interpolated into the LLM system prompt.
+BackgroundValue = Literal[
+    "chemical_engineer",
+    "pharmaceutical_scientist",
+    "food_scientist",
+    "academic_researcher",
+    "quality_engineer",
+    "data_scientist",
+    "student",
+    "other",
+]
 
 
 class RegisterRequest(BaseModel):
@@ -14,7 +28,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     display_name: str | None = Field(None, max_length=100)
-    background: str | None = Field(None, max_length=50)
+    background: BackgroundValue | None = None
 
 
 class LoginRequest(BaseModel):

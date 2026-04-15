@@ -6,6 +6,7 @@ Uses mocks for the database layer to avoid requiring a running PostgreSQL instan
 from __future__ import annotations
 
 import uuid
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -45,6 +46,17 @@ class _FakeUser:
         self.is_active = True
         self.created_at = "2026-01-01T00:00:00+00:00"
         self.updated_at = "2026-01-01T00:00:00+00:00"
+
+
+@contextmanager
+def _without_auth_overrides():
+    """Temporarily clear dependency overrides so real auth logic runs."""
+    saved = dict(app.dependency_overrides)
+    app.dependency_overrides.clear()
+    try:
+        yield
+    finally:
+        app.dependency_overrides.update(saved)
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +240,7 @@ class TestDualAuth:
     async def test_api_key_still_works_on_protected_endpoints(self):
         """API key authentication still works for protected endpoints."""
         test_settings = Settings(app_env="production", api_secret_key="my-secret-key")  # noqa: S106
-        with patch("app.api.deps.settings", test_settings):
+        with _without_auth_overrides(), patch("app.api.deps.settings", test_settings):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
                 resp = await ac.get(
@@ -241,7 +253,7 @@ class TestDualAuth:
     async def test_no_auth_returns_401_in_production(self):
         """No auth at all returns 401 in production."""
         test_settings = Settings(app_env="production", api_secret_key="my-secret-key")  # noqa: S106
-        with patch("app.api.deps.settings", test_settings):
+        with _without_auth_overrides(), patch("app.api.deps.settings", test_settings):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
                 resp = await ac.get("/api/v1/tools")
@@ -256,6 +268,7 @@ class TestDualAuth:
         test_settings = Settings(app_env="production", api_secret_key="my-secret-key")  # noqa: S106
 
         with (
+            _without_auth_overrides(),
             patch("app.api.deps.settings", test_settings),
             patch("app.api.deps.get_user_by_id", mock_get),
         ):
@@ -275,7 +288,7 @@ class TestDualAuth:
             api_secret_key="my-secret-key",  # noqa: S106
         )
 
-        with patch("app.api.deps.settings", test_settings):
+        with _without_auth_overrides(), patch("app.api.deps.settings", test_settings):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
                 resp = await ac.get(

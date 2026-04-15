@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthUser, require_auth
+from app.api.rate_limit import limiter
+from app.config import settings
 from app.db.session import get_db_session
 from app.schemas.auth import (
     LoginRequest,
@@ -30,7 +32,9 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(settings.register_rate_limit)
 async def register(
+    request: Request,
     body: RegisterRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> TokenResponse:
@@ -57,7 +61,9 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(settings.auth_rate_limit)
 async def login(
+    request: Request,
     body: LoginRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> TokenResponse:
@@ -76,7 +82,9 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit(settings.auth_rate_limit)
 async def refresh(
+    request: Request,
     body: RefreshRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> TokenResponse:

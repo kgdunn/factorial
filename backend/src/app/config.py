@@ -1,4 +1,11 @@
+import logging
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+# Weak default values that must NOT be used in production.
+_INSECURE_DEFAULTS = frozenset({"doe_password", "neo4j_password", "change-me", ""})
 
 
 class Settings(BaseSettings):
@@ -49,6 +56,8 @@ class Settings(BaseSettings):
     # Security
     api_secret_key: str = ""
     chat_rate_limit: str = "10/minute"
+    auth_rate_limit: str = "5/minute"
+    register_rate_limit: str = "3/hour"
 
     # JWT Authentication
     jwt_secret_key: str = ""
@@ -74,6 +83,30 @@ class Settings(BaseSettings):
         if self.app_env == "production":
             return ["Content-Type", "X-API-Key", "Authorization"]
         return ["*"]
+
+    def validate_production_secrets(self) -> None:
+        """Raise on insecure defaults when running in production.
+
+        Called during application startup so the server refuses to start
+        with weak or missing secrets.
+        """
+        if self.app_env != "production":
+            return
+
+        problems: list[str] = []
+
+        if self.jwt_secret_key in _INSECURE_DEFAULTS:
+            problems.append("JWT_SECRET_KEY is empty or uses a default value")
+        if self.api_secret_key in _INSECURE_DEFAULTS:
+            problems.append("API_SECRET_KEY is empty or uses a default value")
+        if self.postgres_password in _INSECURE_DEFAULTS:
+            problems.append("POSTGRES_PASSWORD uses a weak default value")
+        if self.neo4j_password in _INSECURE_DEFAULTS:
+            problems.append("NEO4J_PASSWORD uses a weak default value")
+
+        if problems:
+            msg = "Insecure configuration detected in production:\n  - " + "\n  - ".join(problems)
+            raise SystemExit(msg)
 
 
 settings = Settings()
