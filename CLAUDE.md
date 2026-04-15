@@ -81,6 +81,17 @@ repo-root/
 └── LICENSE
 ```
 
+## Versioning
+
+The version is defined in `backend/pyproject.toml` under `[project] version`. It uses 3-part semver: `MAJOR.MINOR.PATCH` (e.g., `0.3.8`).
+
+**Auto-bump the version with every PR that changes code or configuration:**
+- **PATCH** (last position, e.g., 0.3.7 → 0.3.8): bug fixes, CI/workflow changes, docs updates, dependency bumps, small refactors, and other minor changes.
+- **MINOR** (middle position, e.g., 0.3.8 → 0.4.0): new features, new modules, significant API additions, or meaningful behavioral changes. Resets PATCH to 0.
+- **If unsure** whether a change is major or minor, **ask the user** before bumping.
+
+The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detects version changes on push to `main` and publishes to PyPI, then creates a GitHub Release with a `v$VERSION` tag.
+
 ## Development Conventions
 
 ### Backend (Python)
@@ -89,7 +100,6 @@ repo-root/
 - **Line length**: 120 characters
 - **Linting**: ruff with rules E, W, F, I, N, UP, B, S, T20, SIM
 - **Pre-commit check**: before committing, always run **both** `ruff check src/ tests/` **and** `ruff format --check src/ tests/` from `backend/`. CI runs both and will fail if either reports issues. Use `ruff format src/ tests/` to auto-fix formatting.
-- **Versioning**: bump the patch (last) number in `version` in `backend/pyproject.toml` with each PR (e.g. `"0.2.0"` → `"0.2.1"`).
 - **Imports**: sorted by ruff (isort-compatible), `app` is first-party
 - **Async-first**: all database operations use async drivers (asyncpg for PostgreSQL, neo4j async for Neo4j)
 - **src layout**: code lives in `backend/src/app/`, imported as `from app.xxx import yyy`
