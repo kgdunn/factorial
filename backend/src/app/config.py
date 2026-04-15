@@ -46,12 +46,28 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-20250514"
 
+    # Security
+    api_secret_key: str = ""
+    chat_rate_limit: str = "10/minute"
+
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]
+
+    @property
+    def cors_allow_methods(self) -> list[str]:
+        if self.app_env == "production":
+            return ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
+        return ["*"]
+
+    @property
+    def cors_allow_headers(self) -> list[str]:
+        if self.app_env == "production":
+            return ["Content-Type", "X-API-Key", "Authorization"]
+        return ["*"]
 
 
 settings = Settings()
