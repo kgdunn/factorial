@@ -469,9 +469,22 @@ async def _create_experiment_from_design(
     db: AsyncSession,
     design_output: dict[str, Any],
     conversation_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
 ) -> Any:  # noqa: ANN401
     """Create an Experiment record from a successful generate_design output."""
-    return await create_experiment(db, design_output=design_output, conversation_id=conversation_id)
+    return await create_experiment(db, design_output=design_output, conversation_id=conversation_id, user_id=user_id)
+
+
+def _build_system_prompt(user_background: str | None) -> str:
+    """Build the system prompt, optionally personalised with user background."""
+    if user_background:
+        bg_label = user_background.replace("_", " ")
+        return (
+            f"{SYSTEM_PROMPT}\n\n"
+            f"The user's background: {bg_label}. "
+            f"Tailor your explanations, terminology, and examples to this domain."
+        )
+    return SYSTEM_PROMPT
 
 
 # ---------------------------------------------------------------------------
@@ -482,18 +495,35 @@ async def _create_experiment_from_design(
 async def run_chat(
     message: str,
     conversation_id: uuid.UUID | None,
+    user_id: uuid.UUID | None = None,
+    user_background: str | None = None,
 ) -> AsyncGenerator[ServerSentEvent, None]:
     """Orchestrate a chat turn: load history, run agent loop, persist, stream SSE.
 
     The DB session is managed inside the generator (not via ``Depends``)
     so its lifetime matches the SSE stream.
     """
+    system_prompt = _build_system_prompt(user_background)
+
     async with async_session_factory() as db:
         try:
             # 1. Load or create conversation.
             if conversation_id:
                 conversation = await db.get(Conversation, conversation_id)
                 if not conversation:
+                    yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
+                    return
+                # Ownership check: non-service users can only access their own conversations.
+                _bypass_ids = {
+                    "00000000-0000-0000-0000-000000000000",
+                    "00000000-0000-0000-0000-000000000001",
+                }
+                if (
+                    user_id
+                    and conversation.user_id
+                    and conversation.user_id != user_id
+                    and str(user_id) not in _bypass_ids
+                ):
                     yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
                     return
                 result = await db.execute(
@@ -506,7 +536,8 @@ async def run_chat(
                 conversation = Conversation(
                     title=message[:100],
                     model_key=settings.anthropic_model,
-                    system_prompt=SYSTEM_PROMPT,
+                    system_prompt=system_prompt,
+                    user_id=user_id,
                     total_input_tokens=0,
                     total_output_tokens=0,
                     message_count=0,
@@ -573,7 +604,9 @@ async def run_chat(
             created_experiments: list[Any] = []
             for rec in tool_call_records:
                 if rec["tool_name"] == "generate_design" and rec.get("status") == "success":
-                    experiment = await _create_experiment_from_design(db, rec["tool_output"], conversation.id)
+                    experiment = await _create_experiment_from_design(
+                        db, rec["tool_output"], conversation.id, user_id=user_id
+                    )
                     created_experiments.append(experiment)
 
             # Update cached message count.

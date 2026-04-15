@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import AuthUser, require_auth
 from app.db.session import get_db_session
 from app.schemas.experiments import (
     ExperimentDetail,
@@ -73,9 +74,12 @@ async def list_experiments(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
 ) -> ExperimentListResponse:
     """List experiments with optional status filter and pagination."""
-    experiments, total = await experiment_service.list_experiments(db, status=status, page=page, page_size=page_size)
+    experiments, total = await experiment_service.list_experiments(
+        db, user_id=current_user.id, status=status, page=page, page_size=page_size
+    )
     return ExperimentListResponse(
         experiments=[_summary_from_model(e) for e in experiments],
         total=total,
@@ -88,9 +92,10 @@ async def list_experiments(
 async def get_experiment(
     experiment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
 ) -> ExperimentDetail:
     """Get a single experiment by ID."""
-    exp = await experiment_service.get_experiment(db, experiment_id)
+    exp = await experiment_service.get_experiment(db, experiment_id, user_id=current_user.id)
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return _detail_from_model(exp)
@@ -101,12 +106,13 @@ async def update_experiment(
     experiment_id: uuid.UUID,
     body: ExperimentUpdate,
     db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
 ) -> ExperimentDetail:
     """Update experiment name and/or status."""
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
-    exp = await experiment_service.update_experiment(db, experiment_id, updates)
+    exp = await experiment_service.update_experiment(db, experiment_id, updates, user_id=current_user.id)
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return _detail_from_model(exp)
@@ -116,9 +122,10 @@ async def update_experiment(
 async def delete_experiment(
     experiment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
 ) -> dict[str, str]:
     """Delete an experiment."""
-    deleted = await experiment_service.delete_experiment(db, experiment_id)
+    deleted = await experiment_service.delete_experiment(db, experiment_id, user_id=current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return {"detail": "Deleted"}
@@ -129,9 +136,10 @@ async def add_results(
     experiment_id: uuid.UUID,
     body: ResultsEntry,
     db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
 ) -> ResultsResponse:
     """Add or update results for an experiment (incremental entry)."""
-    exp = await experiment_service.add_results(db, experiment_id, body.results)
+    exp = await experiment_service.add_results(db, experiment_id, body.results, user_id=current_user.id)
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
     data = exp.results_data or []
@@ -146,9 +154,10 @@ async def add_results(
 async def get_results(
     experiment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
 ) -> ResultsResponse:
     """Get current results for an experiment."""
-    data, count = await experiment_service.get_results(db, experiment_id)
+    data, count = await experiment_service.get_results(db, experiment_id, user_id=current_user.id)
     if data is None:
         raise HTTPException(status_code=404, detail="Experiment not found")
     return ResultsResponse(

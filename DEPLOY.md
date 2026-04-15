@@ -190,6 +190,17 @@ NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=<PASTE_SECOND_GENERATED_PASSWORD>
 
+# Security — API key for machine-to-machine authentication
+# Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+API_SECRET_KEY=<GENERATE_A_RANDOM_SECRET>
+
+# JWT Authentication
+# Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
+JWT_SECRET_KEY=<GENERATE_A_RANDOM_SECRET>
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+
 # CORS — your server IP or domain (update when you add a domain)
 CORS_ORIGINS=http://<YOUR_SERVER_IP>
 

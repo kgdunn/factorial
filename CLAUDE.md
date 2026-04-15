@@ -131,30 +131,31 @@ repo-root/
 | `make frontend-dev` | Start SvelteKit dev server (port 5173) |
 | `make frontend-build` | Build frontend for production |
 
+## Authentication
+
+**Dual auth**: JWT Bearer tokens (browser users) + API key (machine-to-machine).
+
+- **JWT**: `python-jose` + `passlib` + `bcrypt`. Short-lived access tokens (30 min) + refresh tokens (7 days).
+- **API key**: `X-API-Key` header with HMAC comparison. Retained for service-to-service calls.
+- **`require_auth` dependency** (`api/deps.py`): tries JWT first, falls back to API key, returns an `AuthUser` dataclass.
+- **User model** (`models/user.py`): email, password_hash, display_name, background, is_active.
+- **User scoping**: `user_id` FK on `conversations` and `experiments` tables. Service users see all data; regular users see only their own.
+- **System prompt personalization**: user `background` field (e.g. "chemical_engineer") is appended to the agent system prompt.
+- **Auth endpoints**: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`.
+- **Frontend**: JWT stored in localStorage, injected via `authFetch()` wrapper. Auth guard redirects to `/login`.
+- **Testing bypass**: `APP_ENV=testing` returns a synthetic test user; no real auth needed in tests.
+
+### Future auth graduation
+- AWS Cognito or Supabase Auth when social login/MFA needed
+- Redis for token blacklisting (currently stateless)
+
 ## Future Architecture (not yet implemented)
 
 ### Agent Orchestration
 - **LangGraph** for multi-step agent workflows (design experiment -> analyze -> present)
-- **Raw Anthropic SDK** for LLM API calls within LangGraph nodes
+- Currently using raw Anthropic SDK for the agent loop
 - **LangSmith or Langfuse** for agent observability/tracing
-
-### Streaming
-- **SSE (Server-Sent Events)** via FastAPI's `EventSourceResponse` for streaming agent responses
-- POST + SSE pattern: user sends message via POST, agent streams back via SSE
-- Cancel via `AbortController` on client or POST to `/cancel`
-
-### Authentication
-- **JWT auth** with `python-jose` + `passlib` + `OAuth2PasswordBearer` for MVP
-- Graduate to AWS Cognito or Supabase Auth when social login/MFA needed
-
-### DOE Tools (from process-improve package)
-- Factorial designs (full/fractional)
-- Response surface methodology
-- Optimal designs, mixture designs, screening designs
-- PCA, PLS for multivariate analysis
-- Control charts (Shewhart, CUSUM, EWMA)
-- The agent will call these tools via LangGraph tool nodes
 
 ### Redis
 - Deferred for now (commented out in docker-compose.yml)
-- Will be added for session state, agent conversation caching, JWT token management
+- Will be added for session state, agent conversation caching, JWT token blacklisting

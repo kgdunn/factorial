@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from app.api.deps import AuthUser, require_auth
 from app.api.rate_limit import limiter
 from app.config import settings
 from app.db.session import get_db_session
@@ -22,20 +23,32 @@ router = APIRouter()
 
 @router.post("")
 @limiter.limit(settings.chat_rate_limit)
-async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
+async def chat(
+    request: Request,
+    body: ChatRequest,
+    current_user: AuthUser = Depends(require_auth),
+) -> EventSourceResponse:
     """Start or continue a conversation with the DOE agent.
 
     Accepts a user message and optional ``conversation_id``.
     Returns an SSE stream with events: ``conversation_id``, ``token``,
     ``tool_start``, ``tool_result``, ``done``, and ``error``.
     """
-    return EventSourceResponse(run_chat(body.message, body.conversation_id))
+    return EventSourceResponse(
+        run_chat(
+            body.message,
+            body.conversation_id,
+            user_id=current_user.id,
+            user_background=current_user.background,
+        )
+    )
 
 
 @router.get("/{conversation_id}/messages")
 async def get_conversation_messages(
     conversation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
 ) -> dict[str, Any]:
     """Load conversation messages for resuming a chat session.
 
@@ -44,6 +57,14 @@ async def get_conversation_messages(
     """
     conversation = await db.get(Conversation, conversation_id)
     if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Ownership check for non-service users
+    if current_user.id not in (
+        conversation.user_id,
+        uuid.UUID("00000000-0000-0000-0000-000000000000"),  # service user
+        uuid.UUID("00000000-0000-0000-0000-000000000001"),  # test user
+    ):
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     result = await db.execute(

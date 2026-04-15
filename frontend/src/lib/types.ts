@@ -1,3 +1,19 @@
+// ---------------------------------------------------------------------------
+// User / Auth types
+// ---------------------------------------------------------------------------
+
+export interface User {
+  id: string;
+  email: string;
+  display_name: string | null;
+  background: string | null;
+  created_at: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// SSE types
+// ---------------------------------------------------------------------------
+
 /** SSE event types matching the backend protocol. */
 export type SSEEventType =
   | 'conversation_id'

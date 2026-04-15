@@ -6,6 +6,7 @@
  * ReadableStream and manual SSE line parsing instead.
  */
 
+import { authState } from '$lib/state/auth.svelte';
 import type { ExperimentCreatedEvent, SSECallbacks } from '$lib/types';
 
 // ---------------------------------------------------------------------------
@@ -124,9 +125,14 @@ export function streamChat(
 
   (async () => {
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authState.accessToken) {
+        headers['Authorization'] = `Bearer ${authState.accessToken}`;
+      }
+
       const response = await fetch('/api/v1/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });

@@ -2,6 +2,7 @@
  * REST API client for experiment CRUD operations.
  */
 
+import { authFetch } from '$lib/api/client';
 import type {
   ChatMessage,
   ExperimentDetail,
@@ -19,13 +20,13 @@ export async function fetchExperiments(
   if (params?.page) url.searchParams.set('page', String(params.page));
   if (params?.page_size) url.searchParams.set('page_size', String(params.page_size));
 
-  const resp = await fetch(url.toString());
+  const resp = await authFetch(url.toString());
   if (!resp.ok) throw new Error(`Failed to fetch experiments: ${resp.status}`);
   return resp.json();
 }
 
 export async function fetchExperiment(id: string): Promise<ExperimentDetail> {
-  const resp = await fetch(`${BASE}/${id}`);
+  const resp = await authFetch(`${BASE}/${id}`);
   if (!resp.ok) throw new Error(`Failed to fetch experiment: ${resp.status}`);
   return resp.json();
 }
@@ -34,7 +35,7 @@ export async function updateExperiment(
   id: string,
   body: { name?: string; status?: string },
 ): Promise<ExperimentDetail> {
-  const resp = await fetch(`${BASE}/${id}`, {
+  const resp = await authFetch(`${BASE}/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -44,7 +45,7 @@ export async function updateExperiment(
 }
 
 export async function deleteExperiment(id: string): Promise<void> {
-  const resp = await fetch(`${BASE}/${id}`, { method: 'DELETE' });
+  const resp = await authFetch(`${BASE}/${id}`, { method: 'DELETE' });
   if (!resp.ok) throw new Error(`Failed to delete experiment: ${resp.status}`);
 }
 
@@ -52,7 +53,7 @@ export async function submitResults(
   id: string,
   results: Record<string, unknown>[],
 ): Promise<ResultsResponse> {
-  const resp = await fetch(`${BASE}/${id}/results`, {
+  const resp = await authFetch(`${BASE}/${id}/results`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ results }),
@@ -62,7 +63,7 @@ export async function submitResults(
 }
 
 export async function fetchResults(id: string): Promise<ResultsResponse> {
-  const resp = await fetch(`${BASE}/${id}/results`);
+  const resp = await authFetch(`${BASE}/${id}/results`);
   if (!resp.ok) throw new Error(`Failed to fetch results: ${resp.status}`);
   return resp.json();
 }
@@ -70,7 +71,7 @@ export async function fetchResults(id: string): Promise<ResultsResponse> {
 export async function fetchConversationMessages(
   conversationId: string,
 ): Promise<{ conversation_id: string; title: string; messages: ChatMessage[] }> {
-  const resp = await fetch(`/api/v1/chat/${conversationId}/messages`);
+  const resp = await authFetch(`/api/v1/chat/${conversationId}/messages`);
   if (!resp.ok) throw new Error(`Failed to fetch messages: ${resp.status}`);
   return resp.json();
 }
