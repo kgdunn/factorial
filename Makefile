@@ -1,7 +1,36 @@
-.PHONY: install debug deploy deploy-preflight deploy-up deploy-migrate \
+.PHONY: help install debug deploy deploy-preflight deploy-up deploy-migrate \
        clean lint format test migrate \
        frontend-install frontend-dev frontend-build \
        docs-serve docs-build
+
+# ── Help (default target) ───────────────────────────────
+
+help:
+	@echo "Usage: make <target>"
+	@echo ""
+	@echo "Backend:"
+	@echo "  install            Install/update UV and backend dependencies"
+	@echo "  debug              Start uvicorn with hot-reload (port 8000)"
+	@echo "  lint               Check backend code with ruff"
+	@echo "  format             Auto-fix lint issues and format code"
+	@echo "  test               Run backend pytest suite"
+	@echo "  migrate            Run Alembic migrations (upgrade to head)"
+	@echo ""
+	@echo "Frontend:"
+	@echo "  frontend-install   Install frontend npm dependencies"
+	@echo "  frontend-dev       Start SvelteKit dev server"
+	@echo "  frontend-build     Build frontend for production"
+	@echo ""
+	@echo "Docs:"
+	@echo "  docs-serve         Start MkDocs dev server (port 8080)"
+	@echo "  docs-build         Build documentation site (strict mode)"
+	@echo ""
+	@echo "Full Stack:"
+	@echo "  deploy             Full deploy: preflight, build, start, migrate"
+	@echo "  deploy-preflight   Validate .env, install, lint, test"
+	@echo "  deploy-up          Build and start Docker services"
+	@echo "  deploy-migrate     Run migrations in Docker"
+	@echo "  clean              Tear down Docker services and remove caches"
 
 # ── Backend ──────────────────────────────────────────────
 
