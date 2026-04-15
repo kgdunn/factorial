@@ -63,16 +63,18 @@ results after receiving tool output.
 """
 
 # Allowed background values that may be interpolated into the system prompt.
-_ALLOWED_BACKGROUNDS = frozenset({
-    "chemical_engineer",
-    "pharmaceutical_scientist",
-    "food_scientist",
-    "academic_researcher",
-    "quality_engineer",
-    "data_scientist",
-    "student",
-    "other",
-})
+_ALLOWED_BACKGROUNDS = frozenset(
+    {
+        "chemical_engineer",
+        "pharmaceutical_scientist",
+        "food_scientist",
+        "academic_researcher",
+        "quality_engineer",
+        "data_scientist",
+        "student",
+        "other",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -530,11 +532,7 @@ async def run_chat(
                     yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
                     return
                 # Ownership check: only service accounts can access other users' conversations.
-                if (
-                    user_id
-                    and conversation.user_id
-                    and conversation.user_id != user_id
-                ):
+                if user_id and conversation.user_id and conversation.user_id != user_id:
                     yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
                     return
                 result = await db.execute(
