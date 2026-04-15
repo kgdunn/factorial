@@ -1,4 +1,5 @@
-.PHONY: install debug deploy clean lint format test migrate \
+.PHONY: install debug deploy deploy-preflight deploy-up deploy-migrate \
+       clean lint format test migrate \
        frontend-install frontend-dev frontend-build
 
 # ── Backend ──────────────────────────────────────────────
@@ -36,8 +37,32 @@ frontend-build:
 
 # ── Full Stack ───────────────────────────────────────────
 
-deploy:
-	docker compose up --build -d
+deploy: deploy-preflight deploy-up deploy-migrate
+	@echo ""
+	@echo "===== Deploy complete! ====="
+	@echo "  Backend:  http://localhost:8000"
+	@echo "  Frontend: http://localhost:3000"
+	@echo "  Neo4j:    http://localhost:7474"
+	@echo "  Postgres: localhost:5432"
+	@echo "============================"
+
+deploy-preflight:
+	@echo "==> Checking .env file..."
+	@test -f .env || { echo "ERROR: .env not found. Run: cp .env.example .env  and configure it."; exit 1; }
+	@echo "==> Running lint checks..."
+	@$(MAKE) lint
+	@echo "==> Running tests..."
+	@$(MAKE) test
+
+deploy-up:
+	@echo "==> Building and starting Docker services..."
+	docker compose up --build -d --wait
+	@echo "==> All services are healthy."
+
+deploy-migrate:
+	@echo "==> Running database migrations..."
+	docker compose exec app uv run alembic upgrade head
+	@echo "==> Migrations complete."
 
 clean:
 	docker compose down -v --remove-orphans 2>/dev/null || true
