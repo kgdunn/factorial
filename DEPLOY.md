@@ -132,7 +132,7 @@ docker rmi hello-world 2>/dev/null
 ### 3.1 — Clone and enter the repo
 
 ```bash
-sudo apt install -y git
+sudo apt install -y git make
 cd /home/deploy
 git clone https://github.com/kgdunn/agentic-experimental-design-and-analysis.git
 cd agentic-experimental-design-and-analysis
