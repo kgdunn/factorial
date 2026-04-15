@@ -59,12 +59,8 @@ async def get_conversation_messages(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Ownership check for non-service users
-    if current_user.id not in (
-        conversation.user_id,
-        uuid.UUID("00000000-0000-0000-0000-000000000000"),  # service user
-        uuid.UUID("00000000-0000-0000-0000-000000000001"),  # test user
-    ):
+    # Ownership check — service accounts bypass, regular users must own the conversation.
+    if not current_user.is_service_account and current_user.id != conversation.user_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     result = await db.execute(
