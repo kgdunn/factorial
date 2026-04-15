@@ -13,15 +13,15 @@ debug:
 	cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 lint:
-	cd backend && uv run ruff check src/ tests/
-	cd backend && uv run ruff format --check src/ tests/
+	cd backend && uv run --extra dev ruff check src/ tests/
+	cd backend && uv run --extra dev ruff format --check src/ tests/
 
 format:
-	cd backend && uv run ruff check --fix src/ tests/
-	cd backend && uv run ruff format src/ tests/
+	cd backend && uv run --extra dev ruff check --fix src/ tests/
+	cd backend && uv run --extra dev ruff format src/ tests/
 
 test:
-	cd backend && APP_ENV=testing uv run pytest tests/ -v --tb=short
+	cd backend && APP_ENV=testing uv run --extra dev pytest tests/ -v --tb=short
 
 migrate:
 	cd backend && uv run alembic upgrade head
@@ -53,6 +53,8 @@ deploy: deploy-preflight deploy-up deploy-migrate
 deploy-preflight:
 	@echo "==> Checking .env file..."
 	@test -f .env || { echo "ERROR: .env not found. Run: cp .env.example .env  and configure it."; exit 1; }
+	@echo "==> Installing dependencies..."
+	@$(MAKE) install
 	@echo "==> Running lint checks..."
 	@$(MAKE) lint
 	@echo "==> Running tests..."
