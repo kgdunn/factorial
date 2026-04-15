@@ -5,6 +5,8 @@
 # ── Backend ──────────────────────────────────────────────
 
 install:
+	@echo "==> Installing/updating UV..."
+	curl -LsSf https://astral.sh/uv/install.sh | sh
 	cd backend && uv sync --all-extras
 
 debug:
@@ -27,6 +29,8 @@ migrate:
 # ── Frontend ─────────────────────────────────────────────
 
 frontend-install:
+	@echo "==> Updating npm to latest..."
+	npm install -g npm@latest
 	cd frontend && npm install
 
 frontend-dev:

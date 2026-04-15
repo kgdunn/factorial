@@ -106,13 +106,13 @@ make clean
 
 | Command | Description |
 |---------|-------------|
-| `make install` | Install backend dependencies (main + dev) via UV |
+| `make install` | Install/update UV, then install backend dependencies |
 | `make debug` | Start backend with hot-reload on port 8000 |
 | `make lint` | Check backend code with ruff (read-only) |
 | `make format` | Auto-fix backend lint issues and format code |
 | `make test` | Run backend test suite with pytest |
 | `make migrate` | Apply database migrations with Alembic |
-| `make frontend-install` | Install frontend npm dependencies |
+| `make frontend-install` | Update npm to latest, then install frontend dependencies |
 | `make frontend-dev` | Start SvelteKit dev server on port 5173 |
 | `make frontend-build` | Build frontend for production |
 | `make deploy` | Build and start all Docker services |
