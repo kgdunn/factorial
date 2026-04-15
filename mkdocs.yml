@@ -1,7 +1,7 @@
 site_name: Agentic Experimental Design & Analysis
-site_url: https://kgdunn.github.io/agentic-experimental-design-and-analysis/
-repo_url: https://github.com/kgdunn/agentic-experimental-design-and-analysis
-repo_name: kgdunn/agentic-experimental-design-and-analysis
+site_url: https://kgdunn.github.io/agentic-doe/
+repo_url: https://github.com/kgdunn/agentic-doe
+repo_name: kgdunn/agentic-doe
 edit_uri: edit/main/docs/
 
 theme:

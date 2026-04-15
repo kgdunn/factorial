@@ -137,8 +137,8 @@ docker rmi hello-world 2>/dev/null
 ```bash
 sudo apt install -y git make
 cd /home/deploy
-git clone https://github.com/kgdunn/agentic-experimental-design-and-analysis.git
-cd agentic-experimental-design-and-analysis
+git clone https://github.com/kgdunn/agentic-doe.git
+cd agentic-doe
 ```
 
 > If the repo is private, set up a GitHub deploy key or personal access token first.
@@ -483,7 +483,7 @@ sudo tee /etc/docker/daemon.json << 'EOF'
 EOF
 
 sudo systemctl restart docker
-cd /home/deploy/agentic-experimental-design-and-analysis
+cd /home/deploy/agentic-doe
 docker compose up -d
 ```
 
@@ -502,7 +502,7 @@ When updating the running server with new code:
 
 ```bash
 ssh deploy@<YOUR_SERVER_IP>
-cd /home/deploy/agentic-experimental-design-and-analysis
+cd /home/deploy/agentic-doe
 
 git pull origin main
 docker compose up --build -d
@@ -531,7 +531,7 @@ cat backup_YYYYMMDD_HHMMSS.sql | docker compose exec -T postgres psql -U doe_use
 ```bash
 docker compose stop neo4j
 docker run --rm \
-  -v agentic-experimental-design-and-analysis_neo4j_data:/data \
+  -v agentic-doe_neo4j_data:/data \
   -v $(pwd):/backup \
   alpine tar czf /backup/neo4j_backup_$(date +%Y%m%d).tar.gz /data
 docker compose start neo4j
@@ -547,7 +547,7 @@ crontab -e
 Add:
 
 ```cron
-0 3 * * * cd /home/deploy/agentic-experimental-design-and-analysis && docker compose exec -T postgres pg_dump -U doe_user doe_db | gzip > /home/deploy/backups/pg_$(date +\%Y\%m\%d).sql.gz 2>/dev/null
+0 3 * * * cd /home/deploy/agentic-doe && docker compose exec -T postgres pg_dump -U doe_user doe_db | gzip > /home/deploy/backups/pg_$(date +\%Y\%m\%d).sql.gz 2>/dev/null
 ```
 
 ---
