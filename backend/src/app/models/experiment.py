@@ -37,6 +37,12 @@ class Experiment(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(
         String(255),
         default="Untitled Experiment",

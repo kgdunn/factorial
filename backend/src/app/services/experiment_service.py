@@ -1,7 +1,8 @@
 """Service layer for experiment CRUD operations.
 
 All functions accept an ``AsyncSession`` so the caller controls the
-transaction boundary.
+transaction boundary.  User-scoped operations accept a ``user_id``
+parameter to enforce ownership.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import SERVICE_USER_ID
 from app.models.experiment import Experiment
 
 
@@ -19,6 +21,7 @@ async def create_experiment(
     db: AsyncSession,
     design_output: dict[str, Any],
     conversation_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
     name: str | None = None,
 ) -> Experiment:
     """Create an Experiment from a ``generate_design`` tool output.
@@ -45,21 +48,35 @@ async def create_experiment(
         factors=factors_list,
         design_data=design_output,
         conversation_id=conversation_id,
+        user_id=user_id,
     )
     db.add(experiment)
     await db.flush()
     return experiment
 
 
+def _is_service_user(user_id: uuid.UUID | None) -> bool:
+    """Return True if the user_id belongs to a synthetic service/test account."""
+    return user_id is None or user_id == SERVICE_USER_ID
+
+
 async def list_experiments(
     db: AsyncSession,
+    user_id: uuid.UUID | None = None,
     status: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[Experiment], int]:
-    """List experiments with optional status filter and pagination."""
+    """List experiments with optional status filter and pagination.
+
+    Service users (API key) see all experiments; regular users see only their own.
+    """
     query = select(Experiment).order_by(Experiment.created_at.desc())
     count_query = select(func.count()).select_from(Experiment)
+
+    if not _is_service_user(user_id):
+        query = query.where(Experiment.user_id == user_id)
+        count_query = count_query.where(Experiment.user_id == user_id)
 
     if status:
         query = query.where(Experiment.status == status)
@@ -76,21 +93,40 @@ async def list_experiments(
     return experiments, total
 
 
+async def _get_owned_experiment(
+    db: AsyncSession,
+    experiment_id: uuid.UUID,
+    user_id: uuid.UUID | None,
+) -> Experiment | None:
+    """Fetch an experiment, checking ownership for non-service users.
+
+    Returns None if not found or if the user doesn't own it.
+    """
+    experiment = await db.get(Experiment, experiment_id)
+    if not experiment:
+        return None
+    if not _is_service_user(user_id) and experiment.user_id != user_id:
+        return None
+    return experiment
+
+
 async def get_experiment(
     db: AsyncSession,
     experiment_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
 ) -> Experiment | None:
-    """Get a single experiment by ID."""
-    return await db.get(Experiment, experiment_id)
+    """Get a single experiment by ID, respecting ownership."""
+    return await _get_owned_experiment(db, experiment_id, user_id)
 
 
 async def update_experiment(
     db: AsyncSession,
     experiment_id: uuid.UUID,
     updates: dict[str, Any],
+    user_id: uuid.UUID | None = None,
 ) -> Experiment | None:
-    """Update experiment fields. Returns None if not found."""
-    experiment = await db.get(Experiment, experiment_id)
+    """Update experiment fields. Returns None if not found or not owned."""
+    experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:
         return None
 
@@ -105,9 +141,10 @@ async def update_experiment(
 async def delete_experiment(
     db: AsyncSession,
     experiment_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
 ) -> bool:
-    """Delete an experiment. Returns True if found and deleted."""
-    experiment = await db.get(Experiment, experiment_id)
+    """Delete an experiment. Returns True if found, owned, and deleted."""
+    experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:
         return False
     await db.delete(experiment)
@@ -119,13 +156,14 @@ async def add_results(
     db: AsyncSession,
     experiment_id: uuid.UUID,
     results: list[dict[str, Any]],
+    user_id: uuid.UUID | None = None,
 ) -> Experiment | None:
     """Merge new results into the experiment's ``results_data``.
 
     Uses ``run_index`` as the merge key: existing rows are updated,
     new rows are appended.  Supports incremental entry.
     """
-    experiment = await db.get(Experiment, experiment_id)
+    experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:
         return None
 
@@ -144,9 +182,10 @@ async def add_results(
 async def get_results(
     db: AsyncSession,
     experiment_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
 ) -> tuple[list[dict[str, Any]] | None, int]:
     """Return ``results_data`` and count of entered results."""
-    experiment = await db.get(Experiment, experiment_id)
+    experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:
         return None, 0
 
