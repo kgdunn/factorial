@@ -1,7 +1,16 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_auth
-from app.api.v1.endpoints import auth, chat, designs, experiments, health, signup, tools
+from app.api.v1.endpoints import (
+    auth,
+    chat,
+    designs,
+    experiments,
+    health,
+    shares_public,
+    signup,
+    tools,
+)
 
 api_v1_router = APIRouter()
 
@@ -13,6 +22,9 @@ api_v1_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 
 # Signup endpoints: public (request, invite) + admin (list, approve, reject).
 api_v1_router.include_router(signup.router, prefix="/signup", tags=["signup"])
+
+# Public share endpoints: no auth — viewers use a revocable token.
+api_v1_router.include_router(shares_public.router, prefix="/public", tags=["public-shares"])
 
 # Protected endpoints: require JWT or API key.
 _auth = [Depends(require_auth)]

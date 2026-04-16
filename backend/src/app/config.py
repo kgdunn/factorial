@@ -78,6 +78,15 @@ class Settings(BaseSettings):
     invite_token_expire_hours: int = 72
     frontend_url: str = "http://localhost:5173"
 
+    # Shareable experiment links
+    share_token_expire_days: int = 30
+    share_token_length: int = 32
+
+    # Exports
+    exports_enable_pdf: bool = True
+    exports_chromium_path: str | None = None
+    public_share_rate_limit: str = "30/minute"
+
     @property
     def admin_email_list(self) -> list[str]:
         return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]

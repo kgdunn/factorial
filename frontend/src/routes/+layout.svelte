@@ -9,11 +9,18 @@
 
   // Pages that don't require authentication
   const publicPaths = ['/', '/login', '/register', '/register/complete'];
+  // Path prefixes that don't require authentication
+  const publicPathPrefixes = ['/share/'];
+
+  function isPublicPath(path: string): boolean {
+    if (publicPaths.includes(path)) return true;
+    return publicPathPrefixes.some((prefix) => path.startsWith(prefix));
+  }
 
   // Auth guard: redirect to /login if not authenticated on protected pages
   $effect(() => {
     const currentPath = $page.url.pathname;
-    if (!authState.isAuthenticated && !publicPaths.includes(currentPath)) {
+    if (!authState.isAuthenticated && !isPublicPath(currentPath)) {
       goto('/login');
     }
   });

@@ -42,7 +42,7 @@ _openapi_url = None if settings.app_env == "production" else "/openapi.json"
 app = FastAPI(
     title="Agentic Experimental Design & Analysis",
     description="Backend API for AI agent-based Design of Experiments",
-    version="0.3.6",
+    version="0.6.0",
     lifespan=lifespan,
     docs_url=_docs_url,
     redoc_url=_redoc_url,
