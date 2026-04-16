@@ -1,3 +1,7 @@
+<script lang="ts">
+  import { authState } from '$lib/state/auth.svelte';
+</script>
+
 <svelte:head>
   <title>Agentic DOE</title>
 </svelte:head>
@@ -10,14 +14,27 @@
     Design, run, and analyse experiments with an AI-powered assistant using
     Design of Experiments methodology.
   </p>
-  <a
-    href="/chat"
-    class="mt-8 inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white
-           shadow-sm hover:bg-primary-dark transition-colors"
-  >
-    Start chatting
-    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-    </svg>
-  </a>
+  {#if authState.isAuthenticated}
+    <a
+      href="/chat"
+      class="mt-8 inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white
+             shadow-sm hover:bg-primary-dark transition-colors"
+    >
+      Start chatting
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+    </a>
+  {:else}
+    <a
+      href="/register"
+      class="mt-8 inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white
+             shadow-sm hover:bg-primary-dark transition-colors"
+    >
+      Request access
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+      </svg>
+    </a>
+  {/if}
 </div>

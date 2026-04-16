@@ -8,7 +8,7 @@
   let { children }: { children: Snippet } = $props();
 
   // Pages that don't require authentication
-  const publicPaths = ['/', '/login', '/register'];
+  const publicPaths = ['/', '/login', '/register', '/register/complete'];
 
   // Auth guard: redirect to /login if not authenticated on protected pages
   $effect(() => {
@@ -44,6 +44,14 @@
         >
           Experiments
         </a>
+        {#if authState.user?.is_admin}
+          <a
+            href="/admin/signups"
+            class="text-sm text-gray-600 hover:text-primary transition-colors"
+          >
+            Admin
+          </a>
+        {/if}
         <span class="text-sm text-gray-500">
           {authState.user?.display_name || authState.user?.email || ''}
         </span>
@@ -64,7 +72,7 @@
           href="/register"
           class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
         >
-          Register
+          Request access
         </a>
       {/if}
     </div>

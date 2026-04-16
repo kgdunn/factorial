@@ -13,6 +13,7 @@ export interface UserProfile {
   email: string;
   display_name: string | null;
   background: string | null;
+  is_admin: boolean;
   created_at: string | null;
 }
 

@@ -25,38 +25,21 @@ from app.services.auth_service import (
     create_refresh_token,
     decode_token,
     get_user_by_id,
-    register_user,
 )
 
 router = APIRouter()
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_403_FORBIDDEN)
 @limiter.limit(settings.register_rate_limit)
 async def register(
     request: Request,
     body: RegisterRequest,
-    db: AsyncSession = Depends(get_db_session),
-) -> TokenResponse:
-    """Register a new user account and return JWT tokens."""
-    try:
-        user = await register_user(
-            db,
-            email=body.email,
-            password=body.password,
-            display_name=body.display_name,
-            background=body.background,
-        )
-        await db.commit()
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        ) from None
-
-    return TokenResponse(
-        access_token=create_access_token(user.id, user.email),
-        refresh_token=create_refresh_token(user.id),
+) -> dict[str, str]:
+    """Direct registration is disabled — users must be invited."""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Registration is by invite only. Please submit a signup request first.",
     )
 
 
@@ -128,4 +111,5 @@ async def get_me(
         display_name=current_user.display_name,
         background=current_user.background,
         created_at=None,
+        is_admin=current_user.email.lower() in settings.admin_email_list,
     )

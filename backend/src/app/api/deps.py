@@ -175,3 +175,17 @@ async def require_auth(
         detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer, ApiKey"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Admin authorization
+# ---------------------------------------------------------------------------
+
+
+async def require_admin(
+    current_user: AuthUser = Depends(require_auth),
+) -> AuthUser:
+    """Require the current user to be an admin (email in ADMIN_EMAILS)."""
+    if current_user.email.lower() not in settings.admin_email_list:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user

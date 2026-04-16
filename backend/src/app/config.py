@@ -65,6 +65,23 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
+    # SMTP Email
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
+
+    # Admin / Signup approval
+    admin_emails: str = ""
+    invite_token_expire_hours: int = 72
+    frontend_url: str = "http://localhost:5173"
+
+    @property
+    def admin_email_list(self) -> list[str]:
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
