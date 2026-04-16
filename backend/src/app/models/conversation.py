@@ -12,8 +12,9 @@ Three models track the full lifecycle of agent conversations:
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,6 +46,11 @@ class Conversation(Base):
     total_input_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     total_output_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     message_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # Cost tracking (USD). ``total_cost_usd`` is raw Anthropic cost; the
+    # ``_markup`` variant is what we would bill the customer.
+    total_cost_usd: Mapped[Decimal] = mapped_column(Numeric(14, 10), default=Decimal("0"), server_default="0")
+    total_markup_cost_usd: Mapped[Decimal] = mapped_column(Numeric(14, 10), default=Decimal("0"), server_default="0")
 
     # Organisation
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -112,6 +118,16 @@ class Message(Base):
     stop_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     extra: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+
+    # Per-message cost snapshot (USD). Rates + markup are frozen at call
+    # time so historical rows stay accurate when the rate table or markup
+    # changes later.
+    input_rate_usd_per_mtok: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    output_rate_usd_per_mtok: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    input_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 10), nullable=True)
+    output_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 10), nullable=True)
+    markup_rate: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
+    markup_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 10), nullable=True)
 
     # Timestamps
     created_at: Mapped[str] = mapped_column(

@@ -20,6 +20,7 @@ import time
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 import anthropic
@@ -30,6 +31,7 @@ from sse_starlette.sse import ServerSentEvent
 from app.config import settings
 from app.db.session import async_session_factory
 from app.models.conversation import Conversation, Message, ToolCall
+from app.services import pricing
 from app.services.exceptions import ToolExecutionError
 from app.services.experiment_service import create_experiment
 from app.services.tools import execute_tool_call, get_tool_specs
@@ -155,12 +157,14 @@ def _run_agent_loop(
 
             # --- Collect response metadata ---
             usage = response.usage
+            cost = pricing.calculate_cost(response.model, usage.input_tokens, usage.output_tokens)
             response_meta = {
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
                 "stop_reason": response.stop_reason,
                 "model": response.model,
                 "latency_ms": turn_latency_ms,
+                **cost,
             }
 
             # --- Append assistant message (with all content blocks) ---
@@ -412,6 +416,12 @@ async def _persist_new_messages(
                         model_used=meta.get("model"),
                         stop_reason=meta.get("stop_reason"),
                         latency_ms=meta.get("latency_ms"),
+                        input_rate_usd_per_mtok=meta.get("input_rate_usd_per_mtok"),
+                        output_rate_usd_per_mtok=meta.get("output_rate_usd_per_mtok"),
+                        input_cost_usd=meta.get("input_cost_usd"),
+                        output_cost_usd=meta.get("output_cost_usd"),
+                        markup_rate=meta.get("markup_rate"),
+                        markup_cost_usd=meta.get("markup_cost_usd"),
                     )
                     db.add(msg_row)
                     tool_use_id_to_msg_id[block.get("id", "")] = msg_row.id
@@ -427,6 +437,12 @@ async def _persist_new_messages(
                         model_used=meta.get("model"),
                         stop_reason=meta.get("stop_reason"),
                         latency_ms=meta.get("latency_ms"),
+                        input_rate_usd_per_mtok=meta.get("input_rate_usd_per_mtok"),
+                        output_rate_usd_per_mtok=meta.get("output_rate_usd_per_mtok"),
+                        input_cost_usd=meta.get("input_cost_usd"),
+                        output_cost_usd=meta.get("output_cost_usd"),
+                        markup_rate=meta.get("markup_rate"),
+                        markup_cost_usd=meta.get("markup_cost_usd"),
                     )
                     db.add(msg_row)
                     seq += 1
@@ -444,6 +460,16 @@ async def _persist_new_messages(
         # Accumulate token counts on the conversation.
         conversation.total_input_tokens = (conversation.total_input_tokens or 0) + meta.get("input_tokens", 0)
         conversation.total_output_tokens = (conversation.total_output_tokens or 0) + meta.get("output_tokens", 0)
+
+        # Accumulate cost. Raw cost = what Anthropic charges us; markup cost
+        # = what we would bill the customer at the markup rate in force
+        # when the call was made.
+        conversation.total_cost_usd = (conversation.total_cost_usd or Decimal("0")) + meta.get(
+            "raw_cost_usd", Decimal("0")
+        )
+        conversation.total_markup_cost_usd = (conversation.total_markup_cost_usd or Decimal("0")) + meta.get(
+            "markup_cost_usd", Decimal("0")
+        )
 
     return tool_use_id_to_msg_id
 

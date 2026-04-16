@@ -229,6 +229,46 @@ class TestChatEndpointMocked:
             assert "output" in data
 
     @pytest.mark.asyncio
+    async def test_cost_fields_persisted(self):
+        """Verify that cost snapshot flows into persisted Message/Conversation rows."""
+        from decimal import Decimal
+
+        from app.models.conversation import Conversation, Message
+
+        mock_response = MockResponse(
+            content=[MockTextBlock(text="Hi.")],
+            stop_reason="end_turn",
+        )
+        mock_client = _make_mock_client([mock_response])
+        session = _NoOpAsyncSession()
+
+        with (
+            patch("app.services.agent_service.get_anthropic_client", return_value=mock_client),
+            patch("app.services.agent_service.async_session_factory", return_value=session),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                response = await ac.post("/api/v1/chat", json={"message": "hi"})
+            assert response.status_code == 200
+
+        messages = [o for o in session.added if isinstance(o, Message)]
+        conversations = [o for o in session.added if isinstance(o, Conversation)]
+        assistant_msgs = [m for m in messages if m.role == "assistant"]
+        assert assistant_msgs, "expected an assistant message to be persisted"
+        m = assistant_msgs[0]
+        # MockUsage: 100 input, 50 output @ sonnet-4 rates ($3/$15 per MTok)
+        assert m.input_cost_usd == Decimal("0.0003")
+        assert m.output_cost_usd == Decimal("0.00075")
+        assert m.markup_rate is not None
+        assert m.markup_cost_usd is not None
+        assert m.markup_cost_usd > m.input_cost_usd + m.output_cost_usd
+
+        assert conversations, "expected a conversation to be persisted"
+        c = conversations[0]
+        assert c.total_cost_usd == Decimal("0.00105")
+        assert c.total_markup_cost_usd > c.total_cost_usd
+
+    @pytest.mark.asyncio
     async def test_missing_api_key_returns_error_event(self):
         """When ANTHROPIC_API_KEY is empty, an error SSE event is emitted."""
         with (
@@ -264,6 +304,9 @@ class TestChatEndpointMocked:
 class _NoOpAsyncSession:
     """Async context manager that does nothing — for tests without a real DB."""
 
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+
     async def __aenter__(self):
         return self
 
@@ -276,6 +319,7 @@ class _NoOpAsyncSession:
             import uuid
 
             obj.id = uuid.uuid4()
+        self.added.append(obj)
 
     async def flush(self) -> None:
         pass
