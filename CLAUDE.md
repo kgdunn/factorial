@@ -173,6 +173,7 @@ The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detect
 - **Commit after every micro step** — each logical change (new file, edit, deletion) gets its own commit.
 - **Push regularly** — don't accumulate unpushed commits.
 - **Open a PR right away** — create a pull request as soon as the branch has its first commit. Don't wait until the work is "done."
+- **Always share the PR link** — after creating a pull request, always include the PR URL in your response to the user.
 
 ## Future Architecture (not yet implemented)
 
