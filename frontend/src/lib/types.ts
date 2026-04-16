@@ -130,3 +130,47 @@ export interface VisualizeDoeOutput {
   plotly: Record<string, unknown> | null;
   echarts: Record<string, unknown> | null;
 }
+
+// ---------------------------------------------------------------------------
+// Shareable experiment links
+// ---------------------------------------------------------------------------
+
+export type ExportFormat = 'pdf' | 'xlsx' | 'csv' | 'md';
+
+export interface ShareLink {
+  id: string;
+  token: string;
+  url: string;
+  allow_results: boolean;
+  expires_at: string | null;
+  revoked_at: string | null;
+  view_count: number;
+  created_at: string;
+}
+
+export interface ShareLinkListResponse {
+  shares: ShareLink[];
+}
+
+export interface ShareLinkCreatePayload {
+  expires_at?: string | null;
+  never_expire?: boolean;
+  allow_results?: boolean;
+}
+
+export interface PublicExperimentView {
+  id: string;
+  name: string;
+  design_type: string | null;
+  n_runs: number | null;
+  n_factors: number | null;
+  factors: Record<string, unknown>[] | null;
+  design_data: Record<string, unknown> | null;
+  results_data: Record<string, unknown>[] | null;
+  owner_display_name: string | null;
+  view_count: number;
+  expires_at: string | null;
+  created_at: string;
+  allow_results: boolean;
+  token: string;
+}

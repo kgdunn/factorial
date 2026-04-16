@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthUser, require_auth
@@ -18,9 +20,38 @@ from app.schemas.experiments import (
     ResultsEntry,
     ResultsResponse,
 )
-from app.services import experiment_service
+from app.schemas.exports import EXPORT_EXTENSIONS, EXPORT_MEDIA_TYPES, ExportFormat
+from app.schemas.shares import (
+    ShareLinkCreate,
+    ShareLinkListResponse,
+    ShareLinkResponse,
+)
+from app.services import experiment_service, export_service, share_service
 
 router = APIRouter()
+
+
+def _slugify(name: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", name).strip("-").lower()
+    return slug or "experiment"
+
+
+async def _build_export_bytes(
+    exp: Any,
+    fmt: ExportFormat,
+    *,
+    include_results: bool,
+    share_url: str | None,
+) -> bytes:
+    if fmt is ExportFormat.csv:
+        return export_service.build_csv(exp, include_results=include_results)
+    if fmt is ExportFormat.xlsx:
+        return export_service.build_xlsx(exp, include_results=include_results)
+    if fmt is ExportFormat.md:
+        return export_service.build_markdown(exp, include_results=include_results, share_url=share_url)
+    if fmt is ExportFormat.pdf:
+        return await export_service.build_pdf(exp, include_results=include_results, share_url=share_url)
+    raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}")
 
 
 # ---------------------------------------------------------------------------
@@ -180,3 +211,121 @@ async def get_results(
         results_data=data,
         n_results_entered=count,
     )
+
+
+# ---------------------------------------------------------------------------
+# Exports
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{experiment_id}/export")
+async def export_experiment(
+    experiment_id: uuid.UUID,
+    format: ExportFormat = Query(..., description="Output format: pdf, xlsx, csv, md"),
+    acknowledge_share: bool = Query(
+        False,
+        description=(
+            "Required for PDF exports — confirms the owner agrees to embed "
+            "analysis plots as static images in the downloaded artifact."
+        ),
+    ),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
+) -> Response:
+    """Stream a rendered export of the experiment in the requested format."""
+    exp = await experiment_service.get_experiment(
+        db,
+        experiment_id,
+        user_id=current_user.id,
+        is_service_account=current_user.is_service_account,
+    )
+    if not exp:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    if format is ExportFormat.pdf and not acknowledge_share:
+        raise HTTPException(
+            status_code=400,
+            detail=("PDF exports embed analysis plots as images; call again with acknowledge_share=true to confirm."),
+        )
+
+    payload = await _build_export_bytes(exp, format, include_results=True, share_url=None)
+    filename = f"{_slugify(exp.name)}.{EXPORT_EXTENSIONS[format]}"
+    return Response(
+        content=payload,
+        media_type=EXPORT_MEDIA_TYPES[format],
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Share links
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{experiment_id}/shares")
+async def create_share_link(
+    experiment_id: uuid.UUID,
+    body: ShareLinkCreate,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
+) -> ShareLinkResponse:
+    """Mint a new read-only share link for an experiment."""
+    share = await share_service.create_share(
+        db,
+        experiment_id,
+        user_id=current_user.id,
+        is_service_account=current_user.is_service_account,
+        expires_at=body.expires_at,
+        never_expire=body.never_expire,
+        allow_results=body.allow_results,
+    )
+    if not share:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    return ShareLinkResponse(**share_service.build_share_response_dict(share))
+
+
+@router.get("/{experiment_id}/shares")
+async def list_share_links(
+    experiment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
+) -> ShareLinkListResponse:
+    """List all share links an owner has minted for an experiment."""
+    shares = await share_service.list_shares(
+        db,
+        experiment_id,
+        user_id=current_user.id,
+        is_service_account=current_user.is_service_account,
+    )
+    if shares is None:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    return ShareLinkListResponse(
+        shares=[ShareLinkResponse(**share_service.build_share_response_dict(s)) for s in shares]
+    )
+
+
+@router.delete("/shares/{token}")
+async def revoke_share_link(
+    token: str,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: AuthUser = Depends(require_auth),
+) -> dict[str, str]:
+    """Revoke a share link.  Idempotent for already-revoked tokens."""
+    revoked = await share_service.revoke_share(
+        db,
+        token,
+        user_id=current_user.id,
+        is_service_account=current_user.is_service_account,
+    )
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Share not found")
+    return {"detail": "Revoked"}
+
+
+# Expose helpers for the public shares endpoint so it can reuse the same
+# filename slug and export pipeline.
+__all__ = [
+    "router",
+    "_slugify",
+    "_build_export_bytes",
+]

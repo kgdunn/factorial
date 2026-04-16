@@ -3,7 +3,9 @@
   import { goto } from '$app/navigation';
   import { experimentsState } from '$lib/state/experiments.svelte';
   import DesignMatrix from '$lib/components/DesignMatrix.svelte';
+  import ExportMenu from '$lib/components/ExportMenu.svelte';
   import ResultsEntryForm from '$lib/components/ResultsEntryForm.svelte';
+  import ShareModal from '$lib/components/ShareModal.svelte';
   import type { ExperimentStatus } from '$lib/types';
 
   const STATUS_OPTIONS: ExperimentStatus[] = ['draft', 'active', 'completed', 'archived'];
@@ -20,6 +22,7 @@
   let showCoded = $state(false);
   let confirmDelete = $state(false);
   let saveSuccess = $state(false);
+  let shareModalOpen = $state(false);
 
   // Load experiment when page params change
   $effect(() => {
@@ -168,6 +171,16 @@
               {/each}
             </select>
 
+            <!-- Export + Share -->
+            <ExportMenu experimentId={exp.id} experimentName={exp.name} />
+            <button
+              class="rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary
+                     hover:bg-blue-50 transition-colors"
+              onclick={() => (shareModalOpen = true)}
+            >
+              Share
+            </button>
+
             <!-- Return to Chat -->
             {#if exp.conversation_id}
               <a
@@ -238,6 +251,12 @@
           />
         </div>
       {/if}
+
+      <ShareModal
+        experimentId={exp.id}
+        bind:open={shareModalOpen}
+        onClose={() => (shareModalOpen = false)}
+      />
     {/if}
   </div>
 </div>
