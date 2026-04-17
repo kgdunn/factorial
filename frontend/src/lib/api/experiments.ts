@@ -66,6 +66,29 @@ export async function submitResults(
   return resp.json();
 }
 
+export interface EvaluateRequestPayload {
+  assumed_sigma?: number;
+  effect_size?: number;
+  alpha?: number;
+  metrics?: string[];
+}
+
+export async function evaluateExperiment(
+  id: string,
+  payload: EvaluateRequestPayload = {},
+): Promise<ExperimentDetail> {
+  const resp = await authFetch(`${BASE}/${id}/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(`Failed to evaluate experiment (${resp.status}): ${detail}`);
+  }
+  return resp.json();
+}
+
 export async function fetchResults(id: string): Promise<ResultsResponse> {
   const resp = await authFetch(`${BASE}/${id}/results`);
   if (!resp.ok) throw new Error(`Failed to fetch results: ${resp.status}`);

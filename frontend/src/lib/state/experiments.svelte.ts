@@ -13,6 +13,8 @@ import {
   updateExperiment,
   deleteExperiment,
   submitResults,
+  evaluateExperiment,
+  type EvaluateRequestPayload,
 } from '$lib/api/experiments';
 import type {
   ExperimentCreatedEvent,
@@ -89,6 +91,19 @@ class ExperimentsState {
       }
     } catch (err: unknown) {
       this.error = err instanceof Error ? err.message : 'Failed to delete experiment';
+    }
+  }
+
+  /** Re-run evaluate_design for an experiment with a tweaked sigma / alpha. */
+  async reEvaluate(id: string, payload: EvaluateRequestPayload = {}): Promise<void> {
+    this.error = null;
+    try {
+      const updated = await evaluateExperiment(id, payload);
+      if (this.currentExperiment && this.currentExperiment.id === id) {
+        this.currentExperiment = updated;
+      }
+    } catch (err: unknown) {
+      this.error = err instanceof Error ? err.message : 'Failed to re-evaluate experiment';
     }
   }
 
