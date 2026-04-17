@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { experimentsState } from '$lib/state/experiments.svelte';
   import DesignMatrix from '$lib/components/DesignMatrix.svelte';
+  import DesignEvaluationBlock from '$lib/components/DesignEvaluationBlock.svelte';
   import ExportMenu from '$lib/components/ExportMenu.svelte';
   import ResultsEntryForm from '$lib/components/ResultsEntryForm.svelte';
   import ShareModal from '$lib/components/ShareModal.svelte';
@@ -79,6 +80,15 @@
     await experimentsState.addResults(exp.id, results);
     saveSuccess = true;
     setTimeout(() => { saveSuccess = false; }, 3000);
+  }
+
+  async function handleReEvaluate(payload: {
+    assumed_sigma?: number;
+    effect_size?: number;
+    alpha?: number;
+  }) {
+    if (!exp) return;
+    await experimentsState.reEvaluate(exp.id, payload);
   }
 </script>
 
@@ -233,6 +243,16 @@
             {/if}
           </div>
           <DesignMatrix matrix={designMatrix()} />
+        </div>
+      {/if}
+
+      <!-- Evaluation Section -->
+      {#if exp.evaluation_data}
+        <div class="mb-8">
+          <DesignEvaluationBlock
+            evaluation={exp.evaluation_data}
+            onReEvaluate={handleReEvaluate}
+          />
         </div>
       {/if}
 
