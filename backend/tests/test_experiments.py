@@ -57,6 +57,7 @@ class _FakeExperiment:
         self.factors = kwargs.get("factors", [{"name": "Temperature"}, {"name": "Pressure"}])
         self.design_data = kwargs.get("design_data", _SAMPLE_DESIGN_DATA)
         self.results_data = kwargs.get("results_data")
+        self.evaluation_data = kwargs.get("evaluation_data")
         self.conversation_id = kwargs.get("conversation_id")
         self.created_at = kwargs.get("created_at", _NOW)
         self.updated_at = kwargs.get("updated_at", _NOW)
