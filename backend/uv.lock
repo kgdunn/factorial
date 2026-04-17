@@ -18,7 +18,7 @@ resolution-markers = [
 
 [[package]]
 name = "agentic-doe"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosmtplib" },
@@ -72,7 +72,7 @@ requires-dist = [
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "passlib", specifier = ">=1.7.4" },
     { name = "playwright", specifier = ">=1.49.0" },
-    { name = "process-improve", specifier = ">=1.2.8" },
+    { name = "process-improve", specifier = ">=1.3.2" },
     { name = "psycopg2-binary", specifier = ">=2.9.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
@@ -1814,7 +1814,7 @@ wheels = [
 
 [[package]]
 name = "process-improve"
-version = "1.2.8"
+version = "1.3.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib" },
@@ -1834,9 +1834,9 @@ dependencies = [
     { name = "statsmodels" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/db/d76c43941052981d15f155f32d8340678a976f220ed01f6e1d3ace33ef95/process_improve-1.2.8.tar.gz", hash = "sha256:1c6d2e32c5829850ea6b5a1a418f7f06195094e63102dcf2ed3309953b5b0ae5", size = 3459085, upload-time = "2026-04-14T19:31:31.803Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/28/da4da7e42835c0d75a5b9b733a42bfe43cb385dd5089cee96a6853308309/process_improve-1.3.2.tar.gz", hash = "sha256:691c31a053937df75b049d00b68aeb07b8090add39a978d4895bc22efee5c68d", size = 3461075, upload-time = "2026-04-16T21:56:08.179Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/ab/3bf747a3a03c338e6adb62ce18ab0214099a46d387f9ecf759808f349a73/process_improve-1.2.8-py3-none-any.whl", hash = "sha256:9e8090f2541c7c6bfed3f6e63e6be305b83c57aa022523a2a7cbe6bb77f8a9ca", size = 3509731, upload-time = "2026-04-14T19:31:29.438Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/9c/106c200a9a81c00c73b888079ade301785ede40436f01396666e37582395/process_improve-1.3.2-py3-none-any.whl", hash = "sha256:a74e04d312552d22c7228b1df121b6be89703406f12a1ed1b1056e358199f872", size = 3511047, upload-time = "2026-04-16T21:56:05.892Z" },
 ]
 
 [[package]]
