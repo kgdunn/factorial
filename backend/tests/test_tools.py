@@ -70,6 +70,7 @@ class TestExecuteToolCall:
 
     def test_error_dict_from_tool(self):
         """Tools that catch errors internally return {\"error\": ...} dicts."""
+        # box_behnken needs at least 3 factors; 1 factor should always error.
         result = execute_tool_call(
             "generate_design",
             {
@@ -79,6 +80,33 @@ class TestExecuteToolCall:
         )
         assert isinstance(result, dict)
         assert "error" in result
+
+    def test_evaluate_design_available(self):
+        """evaluate_design is exposed by process-improve >= 1.3.2."""
+        names = {s["name"] for s in get_tool_specs()}
+        assert "evaluate_design" in names
+
+    def test_evaluate_design_on_full_factorial(self):
+        """evaluate_design consumes the coded matrix of a generated design."""
+        design = execute_tool_call(
+            "generate_design",
+            {
+                "factors": [
+                    {"name": "Temperature", "low": 150.0, "high": 200.0},
+                    {"name": "Pressure", "low": 1.0, "high": 5.0},
+                ],
+                "design_type": "full_factorial",
+            },
+        )
+        result = execute_tool_call(
+            "evaluate_design",
+            {
+                "design_matrix": design["design_coded"],
+                "metric": ["d_efficiency", "resolution"],
+            },
+        )
+        assert isinstance(result, dict)
+        assert "error" not in result
 
 
 class TestExecuteToolCallErrors:

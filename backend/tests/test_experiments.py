@@ -326,3 +326,88 @@ class TestResults:
                 resp = await ac.get(f"/api/v1/experiments/{uuid.uuid4()}/results")
 
             assert resp.status_code == 404
+
+
+class TestEvaluateEndpoint:
+    """POST /api/v1/experiments/{id}/evaluate"""
+
+    @pytest.mark.asyncio
+    async def test_evaluate_persists_and_returns_detail(self):
+        evaluation = {"resolution": "V", "d_efficiency": 0.92}
+        fake = _FakeExperiment()
+        fake_updated = _FakeExperiment(evaluation_data=evaluation)
+
+        with (
+            patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc,
+            patch("app.api.v1.endpoints.experiments.execute_tool_call") as mock_exec,
+        ):
+            mock_svc.get_experiment = AsyncMock(return_value=fake)
+            mock_svc.attach_evaluation = AsyncMock(return_value=fake_updated)
+            mock_exec.return_value = evaluation
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    f"/api/v1/experiments/{fake.id}/evaluate",
+                    json={"assumed_sigma": 2.0, "alpha": 0.05},
+                )
+
+            assert resp.status_code == 200
+            assert resp.json()["evaluation_data"] == evaluation
+            mock_exec.assert_called_once()
+            tool_name, tool_input = mock_exec.call_args.args
+            assert tool_name == "evaluate_design"
+            assert tool_input["sigma"] == 2.0
+            assert tool_input["alpha"] == 0.05
+            assert tool_input["design_matrix"]
+            assert "metric" in tool_input
+
+    @pytest.mark.asyncio
+    async def test_evaluate_rejects_missing_experiment(self):
+        with patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc:
+            mock_svc.get_experiment = AsyncMock(return_value=None)
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    f"/api/v1/experiments/{uuid.uuid4()}/evaluate",
+                    json={},
+                )
+
+            assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_evaluate_rejects_design_less_experiment(self):
+        fake = _FakeExperiment(design_data={"n_runs": 4})
+        with patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc:
+            mock_svc.get_experiment = AsyncMock(return_value=fake)
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    f"/api/v1/experiments/{fake.id}/evaluate",
+                    json={},
+                )
+
+            assert resp.status_code == 400
+            assert "design" in resp.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_evaluate_surfaces_tool_error_dict(self):
+        fake = _FakeExperiment()
+        with (
+            patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc,
+            patch("app.api.v1.endpoints.experiments.execute_tool_call") as mock_exec,
+        ):
+            mock_svc.get_experiment = AsyncMock(return_value=fake)
+            mock_exec.return_value = {"error": "design not evaluable"}
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    f"/api/v1/experiments/{fake.id}/evaluate",
+                    json={},
+                )
+
+            assert resp.status_code == 400
+            assert "not evaluable" in resp.json()["detail"]

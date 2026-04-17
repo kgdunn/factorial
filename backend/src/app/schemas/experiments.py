@@ -95,18 +95,27 @@ class ResultsResponse(BaseModel):
 class EvaluateRequest(BaseModel):
     """POST /experiments/{id}/evaluate request body.
 
-    Both fields are optional: when omitted, evaluate_design uses its own
-    defaults (typically σ=1.0 and α=0.05).
+    All fields are optional. When ``metrics`` is omitted the endpoint
+    requests a comprehensive default set covering resolution, aliasing,
+    efficiency, VIF, condition number, and power.
     """
 
     assumed_sigma: float | None = Field(
         None,
         gt=0,
-        description="Assumed residual standard deviation for power analysis.",
+        description="Residual standard deviation assumed for power analysis.",
+    )
+    effect_size: float | None = Field(
+        None,
+        description="Minimum practical effect size used for power analysis.",
     )
     alpha: float | None = Field(
         None,
         gt=0,
         lt=1,
         description="Type-I error rate used for power calculation.",
+    )
+    metrics: list[str] | None = Field(
+        None,
+        description="Subset of evaluate_design metrics; defaults to a comprehensive set.",
     )

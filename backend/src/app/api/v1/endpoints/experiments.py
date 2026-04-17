@@ -237,12 +237,24 @@ async def evaluate_experiment(
     )
     if not exp:
         raise HTTPException(status_code=404, detail="Experiment not found")
-    if not exp.design_data:
-        raise HTTPException(status_code=400, detail="Experiment has no design to evaluate")
+    design_matrix = (exp.design_data or {}).get("design_coded")
+    if not design_matrix:
+        raise HTTPException(status_code=400, detail="Experiment has no coded design to evaluate")
 
-    tool_input: dict[str, Any] = {"design": exp.design_data}
+    metrics = body.metrics or [
+        "d_efficiency",
+        "i_efficiency",
+        "resolution",
+        "alias_structure",
+        "vif",
+        "condition_number",
+        "power",
+    ]
+    tool_input: dict[str, Any] = {"design_matrix": design_matrix, "metric": metrics}
     if body.assumed_sigma is not None:
-        tool_input["assumed_sigma"] = body.assumed_sigma
+        tool_input["sigma"] = body.assumed_sigma
+    if body.effect_size is not None:
+        tool_input["effect_size"] = body.effect_size
     if body.alpha is not None:
         tool_input["alpha"] = body.alpha
 
