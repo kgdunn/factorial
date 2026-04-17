@@ -41,11 +41,12 @@ class ExperimentSummary(BaseModel):
 
 
 class ExperimentDetail(ExperimentSummary):
-    """Full experiment with design data and results."""
+    """Full experiment with design data, results, and evaluation."""
 
     factors: list[dict[str, Any]] | None = None
     design_data: dict[str, Any] | None = None
     results_data: list[dict[str, Any]] | None = None
+    evaluation_data: dict[str, Any] | None = None
 
 
 class ExperimentListResponse(BaseModel):
@@ -89,3 +90,23 @@ class ResultsResponse(BaseModel):
     experiment_id: uuid.UUID
     results_data: list[dict[str, Any]] | None = None
     n_results_entered: int
+
+
+class EvaluateRequest(BaseModel):
+    """POST /experiments/{id}/evaluate request body.
+
+    Both fields are optional: when omitted, evaluate_design uses its own
+    defaults (typically σ=1.0 and α=0.05).
+    """
+
+    assumed_sigma: float | None = Field(
+        None,
+        gt=0,
+        description="Assumed residual standard deviation for power analysis.",
+    )
+    alpha: float | None = Field(
+        None,
+        gt=0,
+        lt=1,
+        description="Type-I error rate used for power calculation.",
+    )

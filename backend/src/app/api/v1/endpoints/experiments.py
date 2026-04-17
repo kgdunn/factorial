@@ -91,6 +91,7 @@ def _detail_from_model(exp: Any) -> ExperimentDetail:
         factors=exp.factors,
         design_data=exp.design_data,
         results_data=exp.results_data,
+        evaluation_data=exp.evaluation_data,
     )
 
 
