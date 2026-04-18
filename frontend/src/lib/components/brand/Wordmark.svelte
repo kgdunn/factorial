@@ -9,7 +9,7 @@
 
   let { size = 20, onclick, class: klass = '' }: Props = $props();
 
-  const isButton = typeof onclick === 'function';
+  const isButton = $derived(typeof onclick === 'function');
 </script>
 
 {#snippet mark()}

@@ -41,12 +41,11 @@
     md: 'text-[13px] px-4 py-2 gap-2',
   };
 
-  const base =
+  const BASE =
     'inline-flex items-center rounded-full border font-sans font-medium whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
 
-  const iconSize = size === 'sm' ? 12 : 14;
-
-  const classes = `${base} ${VARIANTS[variant]} ${SIZES[size]} ${klass}`;
+  const iconSize = $derived(size === 'sm' ? 12 : 14);
+  const classes = $derived(`${BASE} ${VARIANTS[variant]} ${SIZES[size]} ${klass}`);
 </script>
 
 {#if href}
