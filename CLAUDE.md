@@ -97,9 +97,9 @@ The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detect
 ### Backend (Python)
 
 - **Python >= 3.12** — use modern syntax (type unions with `|`, etc.)
-- **Line length**: 120 characters
+- **Line length: 120 characters — hard limit.** Enforced by Ruff (`E501`) in CI and via the repo-level pre-commit hook (`.pre-commit-config.yaml`). Do not add `# noqa: E501`; do not introduce per-file or per-directory overrides for E501. If a line is too long, refactor it (extract helper, shorten identifiers, break up the expression).
 - **Linting**: ruff with rules E, W, F, I, N, UP, B, S, T20, SIM
-- **Pre-commit check**: before committing, always run **both** `ruff check src/ tests/` **and** `ruff format --check src/ tests/` from `backend/`. CI runs both and will fail if either reports issues. Use `ruff format src/ tests/` to auto-fix formatting.
+- **Pre-commit check**: before committing, always run **both** `ruff check src/ tests/` **and** `ruff format --check src/ tests/` from `backend/`. CI runs both and will fail if either reports issues. Use `ruff format src/ tests/` to auto-fix formatting. Install the pre-commit hook once with `pre-commit install` at the repo root to get the same checks on every local commit.
 - **Imports**: sorted by ruff (isort-compatible), `app` is first-party
 - **Async-first**: all database operations use async drivers (asyncpg for PostgreSQL, neo4j async for Neo4j)
 - **src layout**: code lives in `backend/src/app/`, imported as `from app.xxx import yyy`
@@ -125,6 +125,7 @@ The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detect
 - Neo4j for knowledge graph (entity relationships, domain ontology, RAG)
 - Alembic for PostgreSQL schema migrations (runs from `backend/` directory)
 - All SQLAlchemy models inherit from `app.db.base.Base`
+- **Single initial migration**: the schema lives in one forward-only revision (`backend/alembic/versions/0001_initial_schema.py`). Any future schema change is a **new** Alembic revision that chains on top of it. Do not edit `0001_initial_schema.py` in place. Until the first production release, prefer to extend that initial revision directly rather than accumulating tiny migrations. No transition columns, dual-write shims, or "kept for one release" cruft — break the schema cleanly.
 
 ### Testing
 
@@ -160,9 +161,9 @@ The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detect
 - **JWT**: `python-jose` + `passlib` + `bcrypt`. Short-lived access tokens (30 min) + refresh tokens (7 days).
 - **API key**: `X-API-Key` header with HMAC comparison. Retained for service-to-service calls.
 - **`require_auth` dependency** (`api/deps.py`): tries JWT first, falls back to API key, returns an `AuthUser` dataclass.
-- **User model** (`models/user.py`): email, password_hash, display_name, background, is_active.
-- **User scoping**: `user_id` FK on `conversations` and `experiments` tables. Service users see all data; regular users see only their own.
-- **System prompt personalization**: user `background` field (e.g. "chemical_engineer") is appended to the agent system prompt.
+- **User model** (`models/user.py`): email, password_hash, display_name, role_id (FK → roles), is_admin, is_active.
+- **User scoping**: `user_id` FK on `conversations` and `experiments` is **NOT NULL**; ownership is checked unconditionally (no service-account bypass). Admin-only routes gate on `is_admin` via `require_admin`.
+- **System prompt personalization**: the user's role slug (from the `roles` table, surfaced on `AuthUser.background`) is appended to the agent system prompt.
 - **Auth endpoints**: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`.
 - **Frontend**: JWT stored in localStorage, injected via `authFetch()` wrapper. Auth guard redirects to `/login`.
 - **Testing bypass**: `APP_ENV=testing` returns a synthetic test user; no real auth needed in tests.
