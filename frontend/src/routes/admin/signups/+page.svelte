@@ -1,18 +1,27 @@
 <script lang="ts">
+  import { getRoles, type Role } from '$lib/api/roles';
   import {
     getAdminSignups,
     postApproveSignup,
     postRejectSignup,
+    type SignupApproveBody,
   } from '$lib/api/signup';
   import type { SignupDetail } from '$lib/api/signup';
 
   let signups = $state<SignupDetail[]>([]);
+  let roles = $state<Role[]>([]);
   let total = $state(0);
   let currentPage = $state(1);
   let statusFilter = $state<string | undefined>(undefined);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let actionMessage = $state<string | null>(null);
+
+  // Per-card approval state — keyed by signup id.
+  let approveMode = $state<Record<string, 'idle' | 'existing' | 'new' | 'none'>>({});
+  let approveRoleId = $state<Record<string, string>>({});
+  let approveNewName = $state<Record<string, string>>({});
+  let approveNewDesc = $state<Record<string, string>>({});
 
   // Rejection note state
   let rejectingId = $state<string | null>(null);
@@ -28,6 +37,28 @@
       const res = await getAdminSignups(statusFilter, currentPage, pageSize);
       signups = res.signups;
       total = res.total;
+      // Prefill approveRoleId with the matched existing role where possible.
+      for (const s of signups) {
+        if (!(s.id in approveMode)) {
+          if (s.role) {
+            approveMode[s.id] = 'existing';
+            approveRoleId[s.id] = s.role.id;
+          } else if (s.requested_role && !s.requested_role.startsWith('other')) {
+            const match = roles.find((r) => r.name === s.requested_role);
+            if (match) {
+              approveMode[s.id] = 'existing';
+              approveRoleId[s.id] = match.id;
+            } else {
+              approveMode[s.id] = 'idle';
+            }
+          } else if (s.requested_role?.startsWith('other:')) {
+            approveMode[s.id] = 'new';
+            approveNewName[s.id] = s.requested_role.slice('other:'.length).trim();
+          } else {
+            approveMode[s.id] = 'idle';
+          }
+        }
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load signups';
     } finally {
@@ -35,17 +66,35 @@
     }
   }
 
-  // Reload when filter or page changes
+  $effect(() => {
+    getRoles().then((rs) => (roles = rs)).catch(() => { roles = []; });
+  });
+
   $effect(() => {
     void statusFilter;
     void currentPage;
     loadSignups();
   });
 
+  function buildApproveBody(id: string): SignupApproveBody {
+    const mode = approveMode[id] ?? 'idle';
+    if (mode === 'existing' && approveRoleId[id]) {
+      return { role_id: approveRoleId[id] };
+    }
+    if (mode === 'new') {
+      const name = (approveNewName[id] || '').trim();
+      if (name) {
+        return { new_role: { name, description: approveNewDesc[id]?.trim() || null } };
+      }
+    }
+    return {};
+  }
+
   async function handleApprove(id: string) {
     actionMessage = null;
+    error = null;
     try {
-      await postApproveSignup(id);
+      await postApproveSignup(id, buildApproveBody(id));
       actionMessage = 'Approved — invite email sent.';
       await loadSignups();
     } catch (err) {
@@ -55,6 +104,7 @@
 
   async function handleReject(id: string) {
     actionMessage = null;
+    error = null;
     try {
       await postRejectSignup(id, rejectNote || undefined);
       rejectingId = null;
@@ -89,11 +139,11 @@
   };
 </script>
 
-<div class="h-full overflow-y-auto p-6">
+<div class="p-6">
   <div class="mx-auto max-w-5xl space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900">Signup requests</h1>
-      <p class="mt-1 text-sm text-gray-500">Review and manage access requests.</p>
+      <h2 class="text-lg font-semibold text-gray-900">Signup requests</h2>
+      <p class="mt-1 text-sm text-gray-500">Review requests, assign a role, and send the invite.</p>
     </div>
 
     <!-- Status filter tabs -->
@@ -117,7 +167,6 @@
       {/each}
     </div>
 
-    <!-- Messages -->
     {#if error}
       <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
     {/if}
@@ -125,13 +174,11 @@
       <div class="rounded-md bg-green-50 p-3 text-sm text-green-700">{actionMessage}</div>
     {/if}
 
-    <!-- Loading -->
     {#if loading}
       <p class="text-gray-500 text-sm">Loading...</p>
     {:else if signups.length === 0}
       <p class="text-gray-500 text-sm">No signup requests found.</p>
     {:else}
-      <!-- Signup cards -->
       <div class="space-y-4">
         {#each signups as signup}
           <div class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -142,8 +189,18 @@
                   <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {statusColors[signup.status] || 'bg-gray-100 text-gray-600'}">
                     {signup.status}
                   </span>
+                  {#if signup.role}
+                    <span class="inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                      {signup.role.name}
+                    </span>
+                  {/if}
                 </div>
                 <p class="mt-2 text-sm text-gray-600 whitespace-pre-wrap">{signup.use_case}</p>
+                {#if signup.requested_role}
+                  <p class="mt-2 text-xs text-gray-500">
+                    Applicant picked: <code class="text-gray-700">{signup.requested_role}</code>
+                  </p>
+                {/if}
                 {#if signup.admin_note}
                   <p class="mt-2 text-xs text-gray-400">Note: {signup.admin_note}</p>
                 {/if}
@@ -168,6 +225,56 @@
               {/if}
             </div>
 
+            {#if signup.status === 'pending'}
+              <div class="mt-3 border-t border-gray-100 pt-3 space-y-2">
+                <div class="flex items-center gap-3 text-xs">
+                  <label class="inline-flex items-center gap-1">
+                    <input type="radio" name="mode-{signup.id}" value="existing" bind:group={approveMode[signup.id]} />
+                    <span>Assign existing role</span>
+                  </label>
+                  <label class="inline-flex items-center gap-1">
+                    <input type="radio" name="mode-{signup.id}" value="new" bind:group={approveMode[signup.id]} />
+                    <span>Create new role</span>
+                  </label>
+                  <label class="inline-flex items-center gap-1">
+                    <input type="radio" name="mode-{signup.id}" value="idle" bind:group={approveMode[signup.id]} />
+                    <span>Approve without role</span>
+                  </label>
+                </div>
+
+                {#if approveMode[signup.id] === 'existing'}
+                  <select
+                    bind:value={approveRoleId[signup.id]}
+                    class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                  >
+                    <option value="">— Pick a role —</option>
+                    {#each roles as role}
+                      <option value={role.id}>{role.name}{role.is_builtin ? '' : ' (custom)'}</option>
+                    {/each}
+                  </select>
+                {/if}
+
+                {#if approveMode[signup.id] === 'new'}
+                  <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input
+                      type="text"
+                      bind:value={approveNewName[signup.id]}
+                      placeholder="new_role_slug (e.g. polymer_scientist)"
+                      maxlength={50}
+                      class="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                    />
+                    <input
+                      type="text"
+                      bind:value={approveNewDesc[signup.id]}
+                      placeholder="Description (optional)"
+                      maxlength={500}
+                      class="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                    />
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
             {#if rejectingId === signup.id}
               <div class="mt-3 flex items-end gap-2 border-t border-gray-100 pt-3">
                 <input
@@ -188,7 +295,6 @@
         {/each}
       </div>
 
-      <!-- Pagination -->
       {#if totalPages > 1}
         <div class="flex items-center justify-between pt-4">
           <p class="text-sm text-gray-500">{total} total requests</p>

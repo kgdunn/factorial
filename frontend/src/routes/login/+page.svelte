@@ -66,6 +66,9 @@
       >
         {loading ? 'Signing in...' : 'Sign in'}
       </button>
+      <div class="text-center text-sm">
+        <a href="/auth/reset" class="text-primary hover:underline">Forgot your password?</a>
+      </div>
     </form>
   </div>
 </div>

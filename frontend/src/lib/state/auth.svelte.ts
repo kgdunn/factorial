@@ -106,12 +106,11 @@ class AuthState {
     token: string,
     password: string,
     displayName?: string,
-    background?: string,
   ): Promise<void> {
     this.isLoading = true;
     this.error = null;
     try {
-      const tokens = await postInviteRegister(token, password, displayName, background);
+      const tokens = await postInviteRegister(token, password, displayName);
       this.persistTokens(tokens.access_token, tokens.refresh_token);
 
       const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
@@ -119,12 +118,36 @@ class AuthState {
         id: payload.sub,
         email: payload.email,
         display_name: displayName || null,
-        background: background || null,
+        background: null,
         is_admin: false,
         created_at: null,
       });
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Registration failed';
+      throw err;
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  async completeSetup(token: string, password: string): Promise<void> {
+    this.isLoading = true;
+    this.error = null;
+    try {
+      const { postSetupComplete } = await import('$lib/api/auth');
+      const tokens = await postSetupComplete(token, password);
+      this.persistTokens(tokens.access_token, tokens.refresh_token);
+      const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
+      this.persistUser({
+        id: payload.sub,
+        email: payload.email,
+        display_name: null,
+        background: null,
+        is_admin: false,
+        created_at: null,
+      });
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'Setup failed';
       throw err;
     } finally {
       this.isLoading = false;

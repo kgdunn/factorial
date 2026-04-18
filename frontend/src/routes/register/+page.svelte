@@ -1,28 +1,59 @@
 <script lang="ts">
+  import { getRoles, type Role } from '$lib/api/roles';
   import { postSignupRequest } from '$lib/api/signup';
 
   let email = $state('');
   let useCase = $state('');
+  let roleId = $state<string>(''); // '' | '__other' | <role.id>
+  let otherLabel = $state('');
   let error = $state<string | null>(null);
   let loading = $state(false);
   let submitted = $state(false);
 
+  let roles = $state<Role[]>([]);
+  let rolesLoaded = $state(false);
+
   const maxChars = 400;
   let charsLeft = $derived(maxChars - useCase.length);
+
+  $effect(() => {
+    getRoles()
+      .then((rs) => {
+        roles = rs;
+        rolesLoaded = true;
+      })
+      .catch(() => {
+        // Non-fatal: signup still works without a role
+        rolesLoaded = true;
+      });
+  });
+
+  function buildRequestedRole(): string | null {
+    if (!roleId) return null;
+    if (roleId === '__other') {
+      const trimmed = otherLabel.trim();
+      return trimmed ? `other:${trimmed}` : 'other';
+    }
+    const picked = roles.find((r) => r.id === roleId);
+    return picked ? picked.name : null;
+  }
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
     error = null;
     loading = true;
-
     try {
-      await postSignupRequest(email, useCase);
+      await postSignupRequest(email, useCase, buildRequestedRole());
       submitted = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Something went wrong';
     } finally {
       loading = false;
     }
+  }
+
+  function displayRoleName(r: Role): string {
+    return r.description || r.name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 </script>
 
@@ -76,8 +107,40 @@
         </div>
 
         <div>
+          <label for="role" class="block text-sm font-medium text-gray-700">
+            Your role <span class="text-gray-400 font-normal">(optional)</span>
+          </label>
+          <select
+            id="role"
+            bind:value={roleId}
+            disabled={!rolesLoaded}
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="">— Select your role —</option>
+            {#each roles as role}
+              <option value={role.id}>{displayRoleName(role)}</option>
+            {/each}
+            <option value="__other">Other (describe below)</option>
+          </select>
+
+          {#if roleId === '__other'}
+            <input
+              id="other-role"
+              type="text"
+              bind:value={otherLabel}
+              placeholder="e.g. Polymer scientist"
+              maxlength={100}
+              class="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <p class="mt-1 text-xs text-gray-500">
+              An admin will review this and either add it as a new role or map it to an existing one.
+            </p>
+          {/if}
+        </div>
+
+        <div>
           <label for="useCase" class="block text-sm font-medium text-gray-700">
-            What's your role, and why do you want to use Agentic DOE?
+            Why do you want to use Agentic DOE?
           </label>
           <textarea
             id="useCase"
@@ -86,7 +149,7 @@
             minlength={10}
             maxlength={maxChars}
             rows={5}
-            placeholder="E.g. I'm a chemical engineer working on process optimization and would like to use DOE methods with AI assistance to..."
+            placeholder="E.g. I'm working on process optimization and would like to use DOE methods with AI assistance to..."
             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
           ></textarea>
           <p class="mt-1 text-xs text-gray-500 text-right">

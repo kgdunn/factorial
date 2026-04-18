@@ -80,3 +80,41 @@ export async function getMe(accessToken: string): Promise<UserProfile> {
   if (!resp.ok) throw new Error('Failed to fetch user profile');
   return resp.json();
 }
+
+// ---------------------------------------------------------------------------
+// Password reset / first-time setup
+// ---------------------------------------------------------------------------
+
+export interface SetupValidateResponse {
+  email: string;
+  valid: boolean;
+  purpose: 'setup' | 'reset' | null;
+}
+
+export async function postPasswordResetRequest(email: string): Promise<void> {
+  // Always returns 202 whether the email exists or not (no enumeration).
+  await fetch('/api/v1/auth/password-reset/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function getSetupValidation(token: string): Promise<SetupValidateResponse> {
+  const resp = await fetch(`/api/v1/auth/setup/validate?token=${encodeURIComponent(token)}`);
+  if (!resp.ok) throw new Error('Failed to validate link');
+  return resp.json();
+}
+
+export async function postSetupComplete(token: string, password: string): Promise<TokenResponse> {
+  const resp = await fetch('/api/v1/auth/setup/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, password }),
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error(data.detail || `Setup failed: ${resp.status}`);
+  }
+  return resp.json();
+}
