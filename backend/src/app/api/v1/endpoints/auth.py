@@ -111,5 +111,5 @@ async def get_me(
         display_name=current_user.display_name,
         background=current_user.background,
         created_at=None,
-        is_admin=current_user.email.lower() in settings.admin_email_list,
+        is_admin=current_user.is_admin,
     )

@@ -1,0 +1,113 @@
+"""Password reset + first-time setup endpoints.
+
+Shared between:
+
+- First-time admin bootstrap (``purpose="setup"`` tokens issued by the CLI)
+- Ordinary password reset for existing users (``purpose="reset"`` tokens
+  issued by ``POST /auth/password-reset/request`` or the admin UI).
+"""
+
+from __future__ import annotations
+
+import contextlib
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import AuthUser, require_auth
+from app.api.rate_limit import limiter
+from app.config import settings
+from app.db.session import get_db_session
+from app.schemas.auth import (
+    PasswordChangePayload,
+    PasswordResetCompletePayload,
+    PasswordResetRequestPayload,
+    PasswordResetValidateResponse,
+    TokenResponse,
+)
+from app.services import setup_token_service
+from app.services.auth_service import (
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
+)
+from app.services.email_service import send_setup_email
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+@router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit(settings.auth_rate_limit)
+async def request_password_reset(
+    request: Request,
+    body: PasswordResetRequestPayload,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, str]:
+    """Issue a reset link for the given email if it corresponds to an active user.
+
+    Always returns 202 regardless of whether the email exists, to avoid
+    user-enumeration.
+    """
+    user = await setup_token_service.find_active_user_by_email(db, body.email)
+    if user is not None:
+        token = await setup_token_service.issue_token(db, user, setup_token_service.RESET)
+        url = await setup_token_service.build_setup_url(token)
+        with contextlib.suppress(Exception):
+            await send_setup_email(user.email, url, is_first_time=False)
+    return {"message": "If that email exists, a reset link has been sent."}
+
+
+@router.get("/setup/validate", response_model=PasswordResetValidateResponse)
+async def validate_setup_token(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_db_session),
+) -> PasswordResetValidateResponse:
+    """Validate a setup/reset token without consuming it."""
+    try:
+        tok, user = await setup_token_service.validate_token(db, token)
+        return PasswordResetValidateResponse(email=user.email, valid=True, purpose=tok.purpose)
+    except ValueError:
+        return PasswordResetValidateResponse(email="", valid=False, purpose=None)
+
+
+@router.post("/setup/complete", response_model=TokenResponse)
+@limiter.limit(settings.register_rate_limit)
+async def complete_setup(
+    request: Request,
+    body: PasswordResetCompletePayload,
+    db: AsyncSession = Depends(get_db_session),
+) -> TokenResponse:
+    """Set the user's password via a valid setup/reset token and log them in."""
+    try:
+        user = await setup_token_service.consume_token(db, body.token, body.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+
+    return TokenResponse(
+        access_token=create_access_token(user.id, user.email),
+        refresh_token=create_refresh_token(user.id),
+    )
+
+
+@router.post("/password/change", status_code=status.HTTP_200_OK)
+async def change_password(
+    body: PasswordChangePayload,
+    current_user: AuthUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, str]:
+    """Change your own password after providing the current one."""
+    from app.services.auth_service import get_user_by_id
+
+    user = await get_user_by_id(db, current_user.id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    if not user.password_hash or not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+
+    user.password_hash = hash_password(body.new_password)
+    return {"message": "Password updated"}

@@ -73,8 +73,7 @@ class Settings(BaseSettings):
     smtp_from_email: str = ""
     smtp_use_tls: bool = True
 
-    # Admin / Signup approval
-    admin_emails: str = ""
+    # Signup approval / setup tokens
     invite_token_expire_hours: int = 72
     frontend_url: str = "http://localhost:5173"
 
@@ -86,10 +85,6 @@ class Settings(BaseSettings):
     exports_enable_pdf: bool = True
     exports_chromium_path: str | None = None
     public_share_rate_limit: str = "30/minute"
-
-    @property
-    def admin_email_list(self) -> list[str]:
-        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
 
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

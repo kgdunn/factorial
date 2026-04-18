@@ -4,31 +4,21 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-# Allowlist of valid user background values. Free-text is not permitted
-# because the value is interpolated into the LLM system prompt.
-BackgroundValue = Literal[
-    "chemical_engineer",
-    "pharmaceutical_scientist",
-    "food_scientist",
-    "academic_researcher",
-    "quality_engineer",
-    "data_scientist",
-    "student",
-    "other",
-]
-
 
 class RegisterRequest(BaseModel):
-    """User registration payload."""
+    """Direct registration payload.
+
+    Kept for the (now 403-ed) ``POST /auth/register`` endpoint so clients
+    calling it get a proper 403 instead of a 422. The fields mirror the
+    invite registration payload.
+    """
 
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     display_name: str | None = Field(None, max_length=100)
-    background: BackgroundValue | None = None
 
 
 class LoginRequest(BaseModel):
@@ -63,3 +53,36 @@ class UserResponse(BaseModel):
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Password reset / setup
+# ---------------------------------------------------------------------------
+
+
+class PasswordResetRequestPayload(BaseModel):
+    """Public password-reset initiation payload."""
+
+    email: EmailStr
+
+
+class PasswordResetValidateResponse(BaseModel):
+    """Response when validating a setup/reset token."""
+
+    email: str
+    valid: bool
+    purpose: str | None = None
+
+
+class PasswordResetCompletePayload(BaseModel):
+    """Complete a setup or reset by setting a new password."""
+
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordChangePayload(BaseModel):
+    """Authenticated password change."""
+
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)

@@ -39,6 +39,7 @@ class AuthUser:
     display_name: str | None = None
     background: str | None = None
     is_active: bool = True
+    is_admin: bool = False
     is_service_account: bool = field(default=False)
 
 
@@ -68,6 +69,7 @@ def _testing_user() -> AuthUser:
         email="test@example.com",
         display_name="Test User",
         is_service_account=True,
+        is_admin=True,
     )
 
 
@@ -136,12 +138,22 @@ async def get_current_user(
     if not user or not user.is_active:
         return None
 
+    # Prefer the relational role name; fall back to the legacy background
+    # column so existing rows that weren't backfilled still personalise the
+    # system prompt.
+    role_slug: str | None = None
+    if user.role_id is not None and user.role is not None:
+        role_slug = user.role.name
+    elif user.background:
+        role_slug = user.background
+
     return AuthUser(
         id=user.id,
         email=user.email,
         display_name=user.display_name,
-        background=user.background,
+        background=role_slug,
         is_active=user.is_active,
+        is_admin=user.is_admin,
     )
 
 
@@ -185,7 +197,7 @@ async def require_auth(
 async def require_admin(
     current_user: AuthUser = Depends(require_auth),
 ) -> AuthUser:
-    """Require the current user to be an admin (email in ADMIN_EMAILS)."""
-    if current_user.email.lower() not in settings.admin_email_list:
+    """Require the current user to be an admin (``users.is_admin`` true)."""
+    if not current_user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user

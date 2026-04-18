@@ -17,12 +17,14 @@ from app.schemas.auth import TokenResponse
 from app.schemas.signup import (
     InviteRegisterRequest,
     InviteValidateResponse,
+    SignupApproveRequest,
     SignupDetail,
     SignupListResponse,
     SignupRejectRequest,
     SignupSubmitRequest,
     SignupSubmitResponse,
 )
+from app.services.admin_service import list_admin_emails
 from app.services.auth_service import create_access_token, create_refresh_token
 from app.services.email_service import send_admin_notification, send_invite_email, send_signup_confirmation
 from app.services.signup_service import (
@@ -53,14 +55,15 @@ async def submit_signup(
 ) -> SignupSubmitResponse:
     """Submit a signup request for admin review."""
     try:
-        await create_signup(db, email=body.email, use_case=body.use_case)
-        await db.commit()
+        await create_signup(db, email=body.email, use_case=body.use_case, requested_role=body.requested_role)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
 
+    admin_emails = await list_admin_emails(db)
+
     # Fire-and-forget emails (don't fail the request if email fails)
     with contextlib.suppress(Exception):
-        await send_admin_notification(body.email, body.use_case)
+        await send_admin_notification(body.email, body.use_case, admin_emails)
     with contextlib.suppress(Exception):
         await send_signup_confirmation(body.email, body.use_case)
 
@@ -96,9 +99,7 @@ async def register_with_invite(
             token=body.token,
             password=body.password,
             display_name=body.display_name,
-            background=body.background,
         )
-        await db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
@@ -134,13 +135,20 @@ async def admin_list_signups(
 @router.post("/admin/{signup_id}/approve", status_code=status.HTTP_200_OK)
 async def admin_approve_signup(
     signup_id: uuid.UUID,
+    body: SignupApproveRequest | None = None,
     _admin: AuthUser = Depends(require_admin),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, str]:
-    """Approve a signup request and send the invite email (admin only)."""
+    """Approve a signup, optionally assigning or creating a role, and send the invite."""
+    body = body or SignupApproveRequest()
     try:
-        signup = await approve_signup(db, signup_id)
-        await db.commit()
+        signup = await approve_signup(
+            db,
+            signup_id,
+            role_id=body.role_id,
+            new_role_name=body.new_role.name if body.new_role else None,
+            new_role_description=body.new_role.description if body.new_role else None,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
@@ -161,7 +169,6 @@ async def admin_reject_signup(
     note = body.note if body else None
     try:
         await reject_signup(db, signup_id, note=note)
-        await db.commit()
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
