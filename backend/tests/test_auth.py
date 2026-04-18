@@ -37,12 +37,16 @@ class _FakeUser:
         user_id: uuid.UUID = _TEST_USER_ID,
         email: str = _TEST_EMAIL,
         password: str = _TEST_PASSWORD,
+        is_admin: bool = False,
     ):
         self.id = user_id
         self.email = email
         self.password_hash = hash_password(password)
         self.display_name = "Alice"
         self.background = "chemical_engineer"
+        self.role_id = None
+        self.role = None
+        self.is_admin = is_admin
         self.is_active = True
         self.created_at = "2026-01-01T00:00:00+00:00"
         self.updated_at = "2026-01-01T00:00:00+00:00"
