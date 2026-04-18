@@ -10,12 +10,19 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.role import Role
 from app.models.signup_request import SignupRequest
 from app.models.user import User
+from app.services import role_service
 from app.services.auth_service import hash_password
 
 
-async def create_signup(db: AsyncSession, email: str, use_case: str) -> SignupRequest:
+async def create_signup(
+    db: AsyncSession,
+    email: str,
+    use_case: str,
+    requested_role: str | None = None,
+) -> SignupRequest:
     """Create a new pending signup request.
 
     Raises
@@ -37,7 +44,7 @@ async def create_signup(db: AsyncSession, email: str, use_case: str) -> SignupRe
     if result.scalar_one_or_none():
         raise ValueError("This email is already registered")  # noqa: TRY003
 
-    signup = SignupRequest(email=email, use_case=use_case)
+    signup = SignupRequest(email=email, use_case=use_case, requested_role=requested_role)
     db.add(signup)
     await db.flush()
     return signup
@@ -69,23 +76,46 @@ async def list_signups(
     return signups, total
 
 
-async def approve_signup(db: AsyncSession, signup_id: uuid.UUID) -> SignupRequest:
-    """Approve a signup request and generate an invite token.
+async def approve_signup(
+    db: AsyncSession,
+    signup_id: uuid.UUID,
+    role_id: uuid.UUID | None = None,
+    new_role_name: str | None = None,
+    new_role_description: str | None = None,
+) -> SignupRequest:
+    """Approve a signup request, optionally assigning or creating a role.
+
+    The caller passes exactly one of: ``role_id`` (use existing role),
+    ``new_role_name`` (create a new role as part of approval), or
+    neither (approve without a role).
 
     Raises
     ------
     ValueError
-        If the signup is not found or not in pending status.
+        Signup not found, not pending, or role arguments invalid.
     """
+    if role_id is not None and new_role_name is not None:
+        raise ValueError("Pass either role_id or new_role, not both")  # noqa: TRY003
+
     signup = await db.get(SignupRequest, signup_id)
     if not signup:
         raise ValueError("Signup request not found")  # noqa: TRY003
     if signup.status != "pending":
         raise ValueError(f"Signup is already {signup.status}")  # noqa: TRY003
 
+    resolved_role: Role | None = None
+    if new_role_name is not None:
+        resolved_role = await role_service.create_role(db, new_role_name, new_role_description)
+    elif role_id is not None:
+        resolved_role = await role_service.get_role(db, role_id)
+        if resolved_role is None:
+            raise ValueError("Role not found")  # noqa: TRY003
+
     signup.status = "approved"
     signup.invite_token = secrets.token_urlsafe(32)
     signup.invite_expires_at = datetime.now(UTC) + timedelta(hours=settings.invite_token_expire_hours)
+    if resolved_role is not None:
+        signup.role_id = resolved_role.id
     await db.flush()
     return signup
 
@@ -139,11 +169,11 @@ async def complete_registration(
     token: str,
     password: str,
     display_name: str | None = None,
-    background: str | None = None,
 ) -> User:
     """Complete registration using an invite token.
 
-    Validates the token, creates a User, and marks the signup as registered.
+    Validates the token, creates a User whose ``role_id`` is copied from
+    the signup request, and marks the signup as registered.
 
     Raises
     ------
@@ -161,7 +191,7 @@ async def complete_registration(
         email=signup.email,
         password_hash=hash_password(password),
         display_name=display_name,
-        background=background,
+        role_id=signup.role_id,
     )
     db.add(user)
 

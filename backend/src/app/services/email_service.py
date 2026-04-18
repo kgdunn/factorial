@@ -43,7 +43,7 @@ async def send_email(to: str, subject: str, html_body: str) -> None:
         raise
 
 
-async def send_admin_notification(signup_email: str, use_case: str) -> None:
+async def send_admin_notification(signup_email: str, use_case: str, admin_emails: list[str]) -> None:
     """Notify admin(s) about a new signup request."""
     admin_url = f"{settings.frontend_url}/admin/signups"
     html = f"""\
@@ -53,11 +53,34 @@ async def send_admin_notification(signup_email: str, use_case: str) -> None:
 <blockquote>{use_case}</blockquote>
 <p><a href="{admin_url}">Review signup requests</a></p>
 """
-    for admin in settings.admin_email_list:
+    for admin in admin_emails:
         try:
             await send_email(admin, f"New signup request from {signup_email}", html)
         except Exception:
             logger.exception("Failed to notify admin %s about signup from %s", admin, signup_email)
+
+
+async def send_setup_email(to: str, url: str, is_first_time: bool) -> None:
+    """Send a first-time setup link (``is_first_time=True``) or a password-reset link."""
+    hours = settings.invite_token_expire_hours
+    if is_first_time:
+        subject = "Set your Agentic DOE admin password"
+        heading = "Welcome to Agentic DOE"
+        intro = (
+            "An admin account has been created for you. Click the link below to set "
+            "your password and log in for the first time."
+        )
+    else:
+        subject = "Reset your Agentic DOE password"
+        heading = "Reset your password"
+        intro = "We received a request to reset your password. Click the link below to choose a new one."
+    html = f"""\
+<h2>{heading}</h2>
+<p>{intro}</p>
+<p><a href="{url}">Continue</a></p>
+<p>This link expires in {hours} hours. If you didn't request this, you can ignore the email.</p>
+"""
+    await send_email(to, subject, html)
 
 
 async def send_signup_confirmation(to: str, use_case: str) -> None:

@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import queue
+import re
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -75,19 +76,11 @@ Always explain your reasoning before calling a tool, and summarise the \
 results after receiving tool output.
 """
 
-# Allowed background values that may be interpolated into the system prompt.
-_ALLOWED_BACKGROUNDS = frozenset(
-    {
-        "chemical_engineer",
-        "pharmaceutical_scientist",
-        "food_scientist",
-        "academic_researcher",
-        "quality_engineer",
-        "data_scientist",
-        "student",
-        "other",
-    }
-)
+# Role slugs come from the admin-managed ``roles`` table (or the legacy
+# ``users.background`` column). They're still validated against this
+# regex before being interpolated into the system prompt so that a
+# tampered DB row can't inject prompt content.
+_ALLOWED_BACKGROUND_RE = re.compile(r"^[a-z0-9_]{1,50}$")
 
 
 # ---------------------------------------------------------------------------
@@ -532,7 +525,7 @@ def _build_system_prompt(user_background: str | None) -> str:
     The background value is validated against an allowlist to prevent
     prompt injection via the user profile field.
     """
-    if user_background and user_background in _ALLOWED_BACKGROUNDS:
+    if user_background and _ALLOWED_BACKGROUND_RE.match(user_background):
         bg_label = user_background.replace("_", " ")
         return (
             f"{SYSTEM_PROMPT}\n\n"

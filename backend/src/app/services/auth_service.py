@@ -80,7 +80,6 @@ async def register_user(
     email: str,
     password: str,
     display_name: str | None = None,
-    background: str | None = None,
 ) -> User:
     """Create a new user account.
 
@@ -97,7 +96,6 @@ async def register_user(
         email=email,
         password_hash=hash_password(password),
         display_name=display_name,
-        background=background,
     )
     db.add(user)
     await db.flush()
@@ -112,7 +110,11 @@ async def authenticate_user(
     """Verify credentials and return the user, or None if invalid."""
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(password, user.password_hash):
+    # Empty ``password_hash`` means the account was created via the CLI and is
+    # still awaiting first-time setup; it must not authenticate.
+    if not user or not user.password_hash:
+        return None
+    if not verify_password(password, user.password_hash):
         return None
     if not user.is_active:
         return None
