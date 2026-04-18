@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>factori.al — In-app prototype</title>
+<meta name="viewport" content="width=1440"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;background:#E9E3D1;min-height:100vh;font-family:'Inter Tight',system-ui,sans-serif;color:#26241E;-webkit-font-smoothing:antialiased}
+  .stage{min-height:100vh;padding:28px;display:flex;flex-direction:column;align-items:center;gap:20px}
+  .proto-meta{display:flex;align-items:center;gap:18px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#8C8576;padding:4px 0}
+  .proto-meta .dot{width:5px;height:5px;border-radius:50%;background:#B57A57}
+  .proto-meta .crumb{color:#26241E}
+  .screen-nav{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;padding:6px 0 0}
+  .screen-nav span{font-family:'Inter Tight',sans-serif;font-size:12px;padding:5px 11px;border-radius:999px;background:#F7F4EC;border:1px solid #E4DEC9;color:#5A5649;cursor:pointer}
+  .screen-nav span.active{background:#26241E;color:#F7F4EC;border-color:#26241E}
+  button{font-family:inherit}
+  input,textarea{font-family:inherit}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel">
+// shared.jsx — shared primitives: wordmark, icons, chrome, sidebar, global styles
+
+const C = {
+  paper: '#F7F4EC',
+  paper2: '#EFEADB',
+  paper3: '#E6E0CE',
+  ink: '#26241E',
+  inkSoft: '#5A5649',
+  inkFaint: '#8C8576',
+  rule: '#D9D2BE',
+  ruleSoft: '#E4DEC9',
+  clay: '#B57A57',
+  clayInk: '#7D4E31',
+  clayTint: '#F5ECE2',
+  moss: '#5F7361',
+  sky: '#8BA4B8',
+};
+
+const F = {
+  serif: "'Instrument Serif', serif",
+  sans: "'Inter Tight', system-ui, sans-serif",
+  mono: "'JetBrains Mono', monospace",
+};
+
+// Scatter dot SVG (brand mark) - inline
+function ScatterDot({ size = 12, color = C.ink, accent = C.clay, style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={style}>
+      <circle cx="6" cy="15" r="1.7" fill={color}/>
+      <circle cx="11" cy="9" r="1.7" fill={color}/>
+      <circle cx="17" cy="13" r="1.7" fill={color}/>
+      <circle cx="13" cy="18" r="1.7" fill={accent}/>
+    </svg>
+  );
+}
+
+// Wordmark
+function Wordmark({ size = 20, onClick }) {
+  return (
+    <span onClick={onClick} style={{
+      fontFamily: F.serif, fontStyle: 'italic', fontSize: size, lineHeight: 1,
+      color: C.ink, display: 'inline-flex', alignItems: 'baseline',
+      letterSpacing: '-0.015em', cursor: onClick ? 'pointer' : 'default',
+    }}>
+      factori
+      <span style={{ display: 'inline-flex', width: '0.32em', height: '0.32em', margin: '0 0.05em 0.12em', alignItems:'center', justifyContent:'center' }}>
+        <ScatterDot size="100%"/>
+      </span>
+      <span style={{ color: C.clayInk }}>al</span>
+    </span>
+  );
+}
+
+// Minimal SVG icons (line style)
+const Ico = {
+  home:   <path d="M3 10 L10 3 L17 10 M5 9 V17 H15 V9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>,
+  folder: <path d="M3 6 H8 L10 4 H17 V16 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>,
+  chat:   <path d="M3 5 H17 V13 H10 L6 16 V13 H3 Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>,
+  table:  <path d="M3 5 H17 V15 H3 Z M3 9 H17 M9 5 V15" fill="none" stroke="currentColor" strokeWidth="1.4"/>,
+  chart:  <path d="M3 17 V3 M3 17 H17 M6 13 L9 9 L12 11 L16 6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>,
+  cube:   <path d="M10 3 L17 7 V13 L10 17 L3 13 V7 Z M10 3 V10 M3 7 L10 10 L17 7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>,
+  contour:<g fill="none" stroke="currentColor" strokeWidth="1.4"><ellipse cx="10" cy="10" rx="6" ry="4"/><ellipse cx="10" cy="10" rx="3" ry="2"/><circle cx="10" cy="10" r="0.8" fill="currentColor"/></g>,
+  gear:   <g fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="10" cy="10" r="2.4"/><path d="M10 3.5 V5.5 M10 14.5 V16.5 M3.5 10 H5.5 M14.5 10 H16.5 M5.4 5.4 L6.8 6.8 M13.2 13.2 L14.6 14.6 M5.4 14.6 L6.8 13.2 M13.2 6.8 L14.6 5.4"/></g>,
+  plus:   <path d="M10 4 V16 M4 10 H16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>,
+  arrow:  <path d="M4 10 H16 M12 6 L16 10 L12 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>,
+  check:  <path d="M4 10 L8 14 L16 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>,
+  close:  <path d="M5 5 L15 15 M15 5 L5 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>,
+  dots:   <g fill="currentColor"><circle cx="5" cy="10" r="1.3"/><circle cx="10" cy="10" r="1.3"/><circle cx="15" cy="10" r="1.3"/></g>,
+  search: <g fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="9" cy="9" r="4.5"/><path d="M12.5 12.5 L16 16" strokeLinecap="round"/></g>,
+  sparkle:<path d="M10 3 L11.5 8.5 L17 10 L11.5 11.5 L10 17 L8.5 11.5 L3 10 L8.5 8.5 Z" fill="currentColor"/>,
+  download:<path d="M10 3 V13 M6 9 L10 13 L14 9 M4 16 H16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>,
+};
+
+function Icon({ name, size = 18, color = 'currentColor', style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" style={{ color, ...style }}>
+      {Ico[name]}
+    </svg>
+  );
+}
+
+// Browser chrome (light, brand-aligned)
+function Chrome({ url, children, onBack, onForward }) {
+  return (
+    <div style={{
+      width: 1360, height: 860, borderRadius: 14, overflow: 'hidden',
+      boxShadow: '0 40px 80px -30px rgba(38,36,30,0.35), 0 0 0 1px rgba(38,36,30,0.08)',
+      display: 'flex', flexDirection: 'column', background: C.paper2, margin: '0 auto',
+    }}>
+      {/* Traffic lights + tab */}
+      <div style={{ height: 40, background: C.paper3, display:'flex', alignItems:'center', padding:'0 14px', gap: 16, borderBottom:`1px solid ${C.rule}` }}>
+        <div style={{ display:'flex', gap:8 }}>
+          <div style={{ width:12,height:12,borderRadius:'50%',background:'#E89B8F' }}/>
+          <div style={{ width:12,height:12,borderRadius:'50%',background:'#E8C77A' }}/>
+          <div style={{ width:12,height:12,borderRadius:'50%',background:'#9FB88E' }}/>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, background: C.paper, padding:'6px 12px', borderRadius: 8, border:`1px solid ${C.ruleSoft}`, minWidth: 260 }}>
+          <ScatterDot size={12}/>
+          <span style={{ fontFamily: F.sans, fontSize: 12, color: C.ink }}>factori.al — Yield · Reactor B</span>
+          <Icon name="close" size={12} color={C.inkFaint} style={{ marginLeft: 'auto' }}/>
+        </div>
+      </div>
+      {/* URL bar */}
+      <div style={{ height: 42, background: C.paper2, display:'flex', alignItems:'center', gap:10, padding:'0 16px', borderBottom:`1px solid ${C.rule}` }}>
+        <button onClick={onBack} style={{ background:'transparent', border:'none', color: C.inkFaint, cursor:'pointer', padding:4 }}>
+          <svg width="18" height="18" viewBox="0 0 20 20"><path d="M13 4 L6 10 L13 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        <button onClick={onForward} style={{ background:'transparent', border:'none', color: C.inkFaint, cursor:'pointer', padding:4 }}>
+          <svg width="18" height="18" viewBox="0 0 20 20"><path d="M7 4 L14 10 L7 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        <div style={{ flex:1, height: 28, background: C.paper, borderRadius: 999, border:`1px solid ${C.ruleSoft}`, display:'flex', alignItems:'center', padding:'0 14px', gap:8, fontFamily: F.mono, fontSize: 12, color: C.inkSoft }}>
+          <div style={{ width:10, height:10, borderRadius:2, border:`1.5px solid ${C.moss}`, position:'relative' }}>
+            <div style={{ position:'absolute', inset:1, background: C.moss, opacity:.7 }}/>
+          </div>
+          <span style={{ color: C.inkFaint }}>app.factori.al</span>
+          <span>{url}</span>
+        </div>
+        <Icon name="dots" size={18} color={C.inkFaint}/>
+      </div>
+      {/* App body */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: C.paper }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// App sidebar
+function Sidebar({ current, go, project }) {
+  const items = [
+    { id: 'projects', label: 'Projects', icon: 'folder' },
+    { id: 'divider' },
+    { id: 'chat', label: 'Agent', icon: 'chat', section: true },
+    { id: 'runsheet', label: 'Run-sheet', icon: 'table', section: true },
+    { id: 'entry', label: 'Enter results', icon: 'plus', section: true },
+    { id: 'divider2' },
+    { id: 'effects', label: 'Effects', icon: 'chart', section: true },
+    { id: 'contour', label: 'Contour', icon: 'contour', section: true },
+    { id: 'surface', label: '3D surface', icon: 'cube', section: true },
+    { id: 'divider3' },
+    { id: 'settings', label: 'Settings', icon: 'gear' },
+  ];
+
+  return (
+    <div style={{
+      width: 232, background: C.paper2, borderRight:`1px solid ${C.rule}`,
+      display:'flex', flexDirection:'column', flexShrink: 0,
+    }}>
+      <div style={{ padding:'22px 22px 16px', borderBottom:`1px solid ${C.rule}` }}>
+        <Wordmark size={22} onClick={() => go('projects')}/>
+      </div>
+      {project && (
+        <div style={{ padding:'16px 22px 12px', borderBottom:`1px solid ${C.rule}` }}>
+          <div style={{ fontFamily: F.mono, fontSize: 9, letterSpacing:'.2em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 6 }}>project</div>
+          <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 20, color: C.ink, lineHeight: 1.15 }}>{project.name}</div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.inkFaint, marginTop: 6 }}>{project.meta}</div>
+        </div>
+      )}
+      <div style={{ padding: '14px 12px', flex: 1, overflow:'auto' }}>
+        {items.map((it, i) => {
+          if (it.id?.startsWith('divider')) return <div key={i} style={{ height:1, background: C.rule, margin:'10px 10px' }}/>;
+          const active = current === it.id;
+          const dim = it.section && !project;
+          return (
+            <div key={it.id} onClick={() => !dim && go(it.id)} style={{
+              display:'flex', alignItems:'center', gap: 12, padding:'9px 12px',
+              borderRadius: 8, cursor: dim ? 'not-allowed' : 'pointer',
+              background: active ? C.clayTint : 'transparent',
+              color: dim ? C.inkFaint : (active ? C.clayInk : C.ink),
+              fontFamily: F.sans, fontSize: 13.5, fontWeight: active ? 500 : 400,
+              opacity: dim ? 0.5 : 1,
+              marginBottom: 2,
+            }}>
+              <Icon name={it.icon} size={16}/>
+              <span>{it.label}</span>
+              {active && <div style={{ marginLeft:'auto', width: 4, height: 4, borderRadius: '50%', background: C.clay }}/>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ padding:'16px 22px', borderTop:`1px solid ${C.rule}`, display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ width: 28, height: 28, borderRadius:'50%', background: C.ink, color: C.paper, display:'flex', alignItems:'center', justifyContent:'center', fontFamily: F.mono, fontSize:11 }}>KD</div>
+        <div style={{ lineHeight:1.2 }}>
+          <div style={{ fontFamily: F.sans, fontSize: 12, color: C.ink }}>Kevin Dunn</div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, color: C.inkFaint }}>reactor-b · eu</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Top bar (inside app)
+function TopBar({ title, breadcrumb, actions, tabs, activeTab, onTab }) {
+  return (
+    <div style={{ borderBottom: `1px solid ${C.rule}`, background: C.paper }}>
+      <div style={{ display:'flex', alignItems:'center', padding:'20px 36px', gap: 20 }}>
+        <div style={{ flex: 1 }}>
+          {breadcrumb && (
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 4 }}>
+              {breadcrumb}
+            </div>
+          )}
+          <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 32, color: C.ink, lineHeight: 1.1, letterSpacing:'-0.01em' }}>
+            {title}
+          </div>
+        </div>
+        {actions && <div style={{ display:'flex', gap: 10 }}>{actions}</div>}
+      </div>
+      {tabs && (
+        <div style={{ display:'flex', gap:4, padding:'0 28px' }}>
+          {tabs.map(t => (
+            <div key={t} onClick={() => onTab(t)} style={{
+              padding:'10px 16px', fontFamily: F.sans, fontSize: 13,
+              color: activeTab === t ? C.ink : C.inkFaint, cursor:'pointer',
+              borderBottom: activeTab === t ? `2px solid ${C.clay}` : '2px solid transparent',
+              marginBottom: -1,
+            }}>{t}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Button primitives
+function Btn({ children, onClick, variant = 'ghost', size = 'md', icon, style }) {
+  const base = {
+    fontFamily: F.sans, fontSize: size === 'sm' ? 12 : 13, fontWeight: 500,
+    padding: size === 'sm' ? '7px 12px' : '9px 16px',
+    borderRadius: 999, border: '1px solid transparent', cursor:'pointer',
+    display:'inline-flex', alignItems:'center', gap: 8, whiteSpace:'nowrap',
+  };
+  const v = {
+    primary: { background: C.ink, color: C.paper },
+    clay:    { background: C.clay, color: '#fff' },
+    ghost:   { background: 'transparent', color: C.ink, borderColor: C.rule },
+    chip:    { background: C.paper2, color: C.ink, borderColor: C.ruleSoft },
+  }[variant];
+  return (
+    <button onClick={onClick} style={{ ...base, ...v, ...style }}>
+      {icon && <Icon name={icon} size={14}/>}
+      {children}
+    </button>
+  );
+}
+
+
+
+// ==================================
+
+// screens-a.jsx — Projects, Empty, Chat, Run-sheet, Entry
+
+
+const PROJECTS = [
+  { id: 'yield-q2', name: 'Yield · Reactor B', meta: 'DoE · 2² + 4 cp · 8 runs', status: 'running', progress: 6, total: 8, updated: '2h ago', owner: 'KD' },
+  { id: 'binder',   name: 'Binder formulation', meta: 'Mixture · Scheffé · 10 runs', status: 'analysed', progress: 10, total: 10, updated: 'yesterday', owner: 'KD' },
+  { id: 'coating',  name: 'Coating thickness · line 3', meta: 'CCD · rotatable · 17 runs', status: 'draft', progress: 0, total: 17, updated: '3d ago', owner: 'MT' },
+  { id: 'sensory',  name: 'Brine sensory panel', meta: '2³ factorial · 8 runs + 3 cp', status: 'done', progress: 11, total: 11, updated: 'Apr 3', owner: 'AR' },
+  { id: 'print',    name: 'Infill vs. tensile', meta: 'Plackett–Burman · 12 runs', status: 'running', progress: 7, total: 12, updated: '5h ago', owner: 'KD' },
+];
+
+const STATUS_STYLE = {
+  running: { bg:'#F5ECE2', color: C.clayInk, dot: C.clay, label: 'running' },
+  analysed:{ bg:'#E8EFE8', color: '#3C5240',  dot: C.moss, label: 'analysed' },
+  done:    { bg: C.paper2, color: C.inkSoft,  dot: C.inkFaint, label: 'closed' },
+  draft:   { bg: C.paper2, color: C.inkFaint, dot: C.inkFaint, label: 'draft' },
+};
+
+function StatusPill({ s }) {
+  const st = STATUS_STYLE[s];
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'3px 9px', borderRadius:999, background: st.bg, color: st.color, fontFamily: F.mono, fontSize: 10, letterSpacing:'.12em', textTransform:'uppercase' }}>
+      <span style={{ width:5, height:5, borderRadius:'50%', background: st.dot }}/>
+      {st.label}
+    </span>
+  );
+}
+
+function Screen_Projects({ go }) {
+  return (
+    <div style={{ flex:1, overflow:'auto', background: C.paper }}>
+      <TopBar
+        breadcrumb="workspace · Reactor B team"
+        title={<>Projects</>}
+        actions={<>
+          <Btn variant="ghost" icon="search" size="sm">Search</Btn>
+          <Btn variant="primary" icon="plus" onClick={() => go('empty')}>New experiment</Btn>
+        </>}
+      />
+      <div style={{ padding:'28px 36px 60px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap: 14, marginBottom: 32 }}>
+          {[
+            { k:'active', v:'3', l:'experiments running'},
+            { k:'pending', v:'14', l:'runs to enter'},
+            { k:'decided', v:'2', l:'awaiting sign-off'},
+            { k:'last week', v:'+4', l:'effects identified'},
+          ].map(s => (
+            <div key={s.k} style={{ padding:'18px 20px', borderRadius: 12, border:`1px solid ${C.ruleSoft}`, background: C.paper2 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.2em', textTransform:'uppercase', color: C.inkFaint }}>{s.k}</div>
+              <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 40, color: C.ink, lineHeight: 1, margin:'4px 0 2px' }}>{s.v}</div>
+              <div style={{ fontFamily: F.sans, fontSize: 12, color: C.inkSoft }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display:'flex', alignItems:'baseline', gap: 14, marginBottom: 14 }}>
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint }}>All experiments</div>
+          <div style={{ display:'flex', gap: 6, marginLeft:'auto' }}>
+            {['All','Running','Analysed','Drafts'].map((t,i) => (
+              <span key={t} style={{ fontFamily: F.sans, fontSize: 12, padding:'5px 10px', borderRadius: 999, background: i===0 ? C.ink : 'transparent', color: i===0 ? C.paper : C.inkSoft, border: i===0 ? 'none' : `1px solid ${C.rule}`, cursor:'pointer' }}>{t}</span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ border:`1px solid ${C.rule}`, borderRadius: 12, overflow:'hidden', background: C.paper }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 140px 140px 80px 40px', padding:'14px 20px', borderBottom:`1px solid ${C.ruleSoft}`, background: C.paper2, fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.inkFaint }}>
+            <div>Experiment</div><div>Design</div><div>Progress</div><div>Status</div><div>Updated</div><div></div>
+          </div>
+          {PROJECTS.map((p,i) => (
+            <div key={p.id} onClick={() => go('chat')} style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr 140px 140px 80px 40px', padding:'18px 20px', borderBottom: i < PROJECTS.length-1 ? `1px solid ${C.ruleSoft}` : 'none', alignItems:'center', cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 22, color: C.ink }}>{p.name}</div>
+                <div style={{ fontFamily: F.sans, fontSize: 12, color: C.inkFaint, marginTop: 2 }}>{p.id} · {p.owner}</div>
+              </div>
+              <div style={{ fontFamily: F.mono, fontSize: 12, color: C.inkSoft }}>{p.meta}</div>
+              <div>
+                <div style={{ display:'flex', alignItems:'center', gap: 10 }}>
+                  <div style={{ width: 70, height: 4, background: C.paper3, borderRadius: 2, overflow:'hidden' }}>
+                    <div style={{ width: (p.progress/p.total*100)+'%', height:'100%', background: p.status==='running' ? C.clay : p.status==='analysed' ? C.moss : C.inkFaint }}/>
+                  </div>
+                  <span style={{ fontFamily: F.mono, fontSize: 11, color: C.inkSoft }}>{p.progress}/{p.total}</span>
+                </div>
+              </div>
+              <div><StatusPill s={p.status}/></div>
+              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkFaint }}>{p.updated}</div>
+              <div style={{ color: C.inkFaint, justifySelf:'end' }}><Icon name="dots" size={16}/></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Screen_Empty({ go }) {
+  const [text, setText] = React.useState('');
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'auto' }}>
+      <TopBar
+        breadcrumb="new experiment · blank"
+        title={<>A new <em style={{ color: C.clayInk }}>experiment</em>.</>}
+        actions={<><Btn variant="ghost" onClick={() => go('projects')}>Cancel</Btn></>}
+      />
+      <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'40px 60px' }}>
+        <div style={{ maxWidth: 720, width:'100%', textAlign:'center' }}>
+          <div style={{ width: 96, height: 96, margin:'0 auto 44px', display:'flex', alignItems:'center', justifyContent:'center', position:'relative' }}>
+            <svg width="96" height="96" viewBox="0 0 96 96">
+              <g fill={C.ink}>
+                <circle cx="24" cy="52" r="2.4"/><circle cx="44" cy="32" r="2.4"/>
+                <circle cx="68" cy="46" r="2.4"/><circle cx="34" cy="68" r="2.4"/>
+                <circle cx="78" cy="66" r="2.4"/>
+              </g>
+              <circle cx="52" cy="50" r="5" fill={C.clay}/>
+              <circle cx="52" cy="50" r="13" fill="none" stroke={C.clay} strokeWidth="1" opacity=".4"/>
+              <circle cx="52" cy="50" r="22" fill="none" stroke={C.clay} strokeWidth="0.7" opacity=".2"/>
+            </svg>
+          </div>
+          <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 42, lineHeight:1.15, color: C.ink, marginBottom: 16, position:'relative', zIndex: 1, background: C.paper }}>
+            Describe the process you want to understand.
+          </div>
+          <div style={{ fontFamily: F.sans, fontSize: 15, color: C.inkSoft, marginBottom: 32, maxWidth: 520, margin:'0 auto 32px', lineHeight: 1.6 }}>
+            Name the response, the factors, and roughly how many runs you can afford. The agent will draft a plan and defend the choice.
+          </div>
+          <div style={{ background: C.paper2, border:`1px solid ${C.ruleSoft}`, borderRadius: 14, padding: 20, textAlign:'left' }}>
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="e.g. We're seeing ±3% swing in yield on reactor B. Temperature (160–200°C), feed rate (2–4 L/min), catalyst load (0.5–1.5%). I have two weeks of plant time."
+              style={{ width:'100%', minHeight: 120, background:'transparent', border:'none', resize:'none', outline:'none', fontFamily: F.sans, fontSize: 15, lineHeight: 1.55, color: C.ink }}
+            />
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop: 12, paddingTop: 12, borderTop: `1px dashed ${C.rule}` }}>
+              <div style={{ display:'flex', gap: 8 }}>
+                <Btn variant="chip" size="sm" icon="sparkle">Import CSV</Btn>
+                <Btn variant="chip" size="sm">From template</Btn>
+              </div>
+              <Btn variant="primary" icon="arrow" onClick={() => go('chat')}>Draft a plan</Btn>
+            </div>
+          </div>
+          <div style={{ marginTop: 28, display:'flex', gap: 10, justifyContent:'center', flexWrap:'wrap' }}>
+            {['Yield vs T, feed, catalyst','Binder mixture · 3 components','Coating thickness · line 3','Sensory panel · brine time × salt'].map(s => (
+              <span key={s} onClick={() => { setText(s); }} style={{ fontFamily: F.sans, fontSize: 12, padding:'6px 12px', borderRadius: 999, border:`1px solid ${C.ruleSoft}`, color: C.inkSoft, background: C.paper, cursor:'pointer' }}>{s}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Screen_Chat({ go, project }) {
+  const msgs = [
+    { who:'user', body:'We\'re seeing ±3% swing in yield on reactor B. Temperature (160–200°C), feed rate (2–4 L/min), catalyst load (0.5–1.5%). I have two weeks of plant time.' },
+    { who:'agent', body:<>Three factors, a comfortable budget. I'd suggest a <em style={{ color: C.clayInk }}>2³ full factorial with three centre points</em> — eleven runs, randomised over two blocks to absorb shift-to-shift drift. Enough to name main effects and pairwise interactions, and leave the response-surface follow-up for when we know where the action is.</>, plan: true },
+    { who:'user', body:'Can we hold catalyst load at the current 1.0% and just vary the other two?' },
+    { who:'agent', body:<>Yes — then it's a <em style={{ color: C.clayInk }}>2² with four centre points</em>. Eight runs, about one shift. I'll add two replicates at (180°C, 3.0 L/min) so we can estimate pure error. <br/><br/>Shall I write the run-sheet?</>, plan2: true },
+  ];
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'hidden' }}>
+      <TopBar
+        breadcrumb={`projects · ${project.name}`}
+        title={<>Plan with the <em style={{ color: C.clayInk }}>agent</em>.</>}
+        actions={<><Btn variant="ghost" icon="download" size="sm">Transcript</Btn><Btn variant="primary" onClick={() => go('runsheet')}>Continue to run-sheet</Btn></>}
+        tabs={['Plan','Run-sheet','Data','Analysis','Report']}
+        activeTab="Plan"
+        onTab={t => { if (t==='Run-sheet') go('runsheet'); if (t==='Data') go('entry'); if (t==='Analysis') go('effects'); }}
+      />
+      <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+        {/* chat column */}
+        <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', borderRight: `1px solid ${C.rule}` }}>
+          <div style={{ flex:1, overflow:'auto', padding:'28px 36px', display:'flex', flexDirection:'column', gap: 22 }}>
+            {msgs.map((m, i) => (
+              <div key={i} style={{ display:'flex', gap: 14, maxWidth: 680, alignSelf: m.who==='user' ? 'flex-end' : 'flex-start' }}>
+                {m.who==='agent' && <div style={{ width:30,height:30,borderRadius:'50%',background: C.clayTint, color: C.clayInk, border:`1px solid #EBD9C7`, display:'flex',alignItems:'center',justifyContent:'center', flexShrink:0, fontFamily: F.mono, fontSize: 12 }}>⌁</div>}
+                <div style={{ padding:'14px 18px', borderRadius: 12, background: m.who==='agent' ? C.paper2 : C.clayTint, border: `1px solid ${m.who==='agent' ? C.ruleSoft : '#EBD9C7'}`, fontFamily: F.sans, fontSize: 14, lineHeight: 1.6, color: C.ink }}>
+                  {m.body}
+                  {m.plan && (
+                    <div style={{ marginTop: 12, display:'flex', gap: 6, flexWrap:'wrap' }}>
+                      {[['design','2³ full factorial'],['runs','11'],['blocks','2'],['centre pts','3'],['resolution','V']].map(([k,v]) => (
+                        <span key={k} style={{ display:'inline-flex', gap: 6, padding:'5px 10px', borderRadius: 6, background: C.paper, border:`1px solid ${C.ruleSoft}`, fontFamily: F.mono, fontSize: 11 }}><span style={{ color: C.clayInk }}>{k}</span><span style={{ color: C.inkSoft }}>{v}</span></span>
+                      ))}
+                    </div>
+                  )}
+                  {m.plan2 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ padding: 12, borderRadius: 8, background: C.paper, border: `1px solid ${C.ruleSoft}`, fontFamily: F.mono, fontSize: 11, color: C.inkSoft }}>
+                        <div style={{ color: C.ink, fontFamily: F.sans, fontSize: 13, marginBottom: 8 }}>Draft plan</div>
+                        2² factorial · 4 corners + 4 centre pts · 8 runs<br/>
+                        factors: T ∈ [160, 200]°C &nbsp; F ∈ [2.0, 4.0] L/min<br/>
+                        response: yield (%) &nbsp; blocks: 2 &nbsp; seed: 4217
+                      </div>
+                      <div style={{ marginTop: 10, display:'flex', gap: 8 }}>
+                        <Btn variant="primary" size="sm" icon="check" onClick={() => go('runsheet')}>Accept plan</Btn>
+                        <Btn variant="chip" size="sm">Tweak factors</Btn>
+                        <Btn variant="chip" size="sm">Why this design?</Btn>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {m.who==='user' && <div style={{ width:30,height:30,borderRadius:'50%',background: C.ink, color: C.paper, display:'flex',alignItems:'center',justifyContent:'center', flexShrink:0, fontFamily: F.mono, fontSize: 11 }}>KD</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{ borderTop:`1px solid ${C.rule}`, padding:'16px 36px 22px' }}>
+            <div style={{ background: C.paper2, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding:'14px 16px', display:'flex', alignItems:'center', gap: 12 }}>
+              <input placeholder="Ask the agent anything — &quot;why resolution V?&quot;, &quot;swap to Box-Behnken&quot;, &quot;add a block for shift&quot;" style={{ flex:1, background:'transparent', border:'none', outline:'none', fontFamily: F.sans, fontSize: 14, color: C.ink }}/>
+              <Btn variant="primary" size="sm" icon="arrow">Send</Btn>
+            </div>
+          </div>
+        </div>
+        {/* plan sidebar */}
+        <div style={{ width: 320, padding: '24px 22px', background: C.paper2, overflow:'auto', flexShrink:0 }}>
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>current draft</div>
+          <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 24, color: C.ink, lineHeight: 1.2, marginBottom: 4 }}>2² factorial</div>
+          <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkSoft, marginBottom: 24 }}>8 runs · 2 blocks · seed 4217</div>
+
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 8 }}>Factors</div>
+          {[
+            { n:'Temperature', u:'°C', lo:160, hi:200, k:'T' },
+            { n:'Feed rate', u:'L/min', lo:2.0, hi:4.0, k:'F' },
+            { n:'Catalyst load', u:'%', held:1.0, k:'C', fixed:true },
+          ].map(f => (
+            <div key={f.k} style={{ padding:'12px 14px', background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 10, marginBottom: 8 }}>
+              <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between' }}>
+                <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink }}>{f.n}</div>
+                <div style={{ fontFamily: F.mono, fontSize: 10, color: C.inkFaint }}>{f.k} · {f.u}</div>
+              </div>
+              {f.fixed
+                ? <div style={{ fontFamily: F.mono, fontSize: 12, color: C.inkSoft, marginTop: 4 }}>held @ {f.held}{f.u}</div>
+                : (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ height: 4, background: C.paper3, borderRadius: 2, position:'relative' }}>
+                      <div style={{ position:'absolute', left:'10%', right:'10%', top:-3, bottom:-3, background: C.clay, borderRadius: 4 }}/>
+                    </div>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginTop: 5, fontFamily: F.mono, fontSize: 10, color: C.inkSoft }}>
+                      <span>{f.lo}</span><span>{f.hi}</span>
+                    </div>
+                  </div>
+                )
+              }
+            </div>
+          ))}
+
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, margin:'18px 0 8px' }}>Response</div>
+          <div style={{ padding:'12px 14px', background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 10 }}>
+            <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink }}>Yield</div>
+            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkFaint, marginTop: 2 }}>% · maximise</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const RUN_ROWS = [
+  { o: 1, T: 200, F: 2.0, blk:'A', y: 61.4, s:'done' },
+  { o: 2, T: 180, F: 3.0, blk:'A', y: 64.1, s:'done' },
+  { o: 3, T: 160, F: 4.0, blk:'A', y: 58.9, s:'done' },
+  { o: 4, T: 200, F: 4.0, blk:'A', y: 63.8, s:'done', hl:true },
+  { o: 5, T: 180, F: 3.0, blk:'B', y: 64.3, s:'done' },
+  { o: 6, T: 160, F: 2.0, blk:'B', y: 55.1, s:'done' },
+  { o: 7, T: 200, F: 3.0, blk:'B', y: null, s:'pending' },
+  { o: 8, T: 180, F: 3.0, blk:'B', y: null, s:'pending' },
+];
+
+function Screen_Runsheet({ go, project }) {
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'hidden' }}>
+      <TopBar
+        breadcrumb={`projects · ${project.name}`}
+        title={<>Run-sheet</>}
+        actions={<><Btn variant="ghost" icon="download" size="sm">Export CSV</Btn><Btn variant="ghost" size="sm">Print</Btn><Btn variant="primary" onClick={() => go('entry')}>Enter next result</Btn></>}
+        tabs={['Plan','Run-sheet','Data','Analysis','Report']}
+        activeTab="Run-sheet"
+        onTab={t => { if (t==='Plan') go('chat'); if (t==='Data') go('entry'); if (t==='Analysis') go('effects'); }}
+      />
+      <div style={{ flex:1, overflow:'auto', padding:'28px 36px' }}>
+        <div style={{ display:'flex', gap: 16, marginBottom: 22 }}>
+          {[
+            { k:'runs', v:'8', d:'2² + 4 centre pts' },
+            { k:'completed', v:'6 / 8', d:'75% · block A done' },
+            { k:'time in plant', v:'≈ 6h', d:'Apr 15–16, 2026' },
+            { k:'seed', v:'4217', d:'randomisation' },
+          ].map(s => (
+            <div key={s.k} style={{ flex:1, padding:'16px 18px', background: C.paper2, border:`1px solid ${C.ruleSoft}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.inkFaint }}>{s.k}</div>
+              <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 26, color: C.ink, lineHeight: 1.1, marginTop: 2 }}>{s.v}</div>
+              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkSoft, marginTop: 2 }}>{s.d}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ border:`1px solid ${C.rule}`, borderRadius: 12, overflow:'hidden', background: C.paper }}>
+          <div style={{ display:'grid', gridTemplateColumns:'64px 1.1fr 1.1fr 0.9fr 1fr 1fr 140px 60px', background: C.paper2, padding:'12px 18px', borderBottom:`1px solid ${C.ruleSoft}`, fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.inkFaint }}>
+            <div>ord</div><div>Temp (°C)</div><div>Feed (L/min)</div><div>block</div><div>Yield (%)</div><div>±</div><div>status</div><div></div>
+          </div>
+          {RUN_ROWS.map((r, i) => (
+            <div key={r.o} style={{ display:'grid', gridTemplateColumns:'64px 1.1fr 1.1fr 0.9fr 1fr 1fr 140px 60px', padding:'14px 18px', borderBottom: i < RUN_ROWS.length-1 ? `1px dashed ${C.ruleSoft}` : 'none', alignItems:'center', background: r.hl ? C.clayTint : 'transparent', fontFamily: F.mono, fontSize: 13 }}>
+              <div style={{ color: C.inkFaint }}>{String(r.o).padStart(2,'0')}</div>
+              <div style={{ color: C.ink }}>{r.T}</div>
+              <div style={{ color: C.ink }}>{r.F.toFixed(1)}</div>
+              <div style={{ color: C.inkSoft }}>Block {r.blk}</div>
+              <div style={{ color: r.y ? C.ink : C.inkFaint }}>{r.y ? r.y.toFixed(1) : '—'}</div>
+              <div style={{ color: C.inkFaint, fontSize: 11 }}>{r.y ? '± 0.4' : '—'}</div>
+              <div>
+                {r.s === 'done'
+                  ? <span style={{ display:'inline-flex', alignItems:'center', gap:6, color: C.moss, fontFamily: F.sans, fontSize: 12 }}><Icon name="check" size={12}/>completed</span>
+                  : <span style={{ display:'inline-flex', alignItems:'center', gap:6, color: C.inkFaint, fontFamily: F.sans, fontSize: 12 }}>○ pending</span>
+                }
+              </div>
+              <div style={{ color: C.inkFaint, justifySelf:'end' }}><Icon name="dots" size={16}/></div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 24, padding:'16px 20px', background: C.clayTint, border:`1px solid #EBD9C7`, borderRadius: 10, display:'flex', alignItems:'flex-start', gap: 14 }}>
+          <div style={{ width:28,height:28,borderRadius:'50%',background: '#fff', border:`1px solid #EBD9C7`, color: C.clayInk, display:'flex',alignItems:'center',justifyContent:'center', flexShrink:0, fontFamily: F.mono, fontSize: 12 }}>⌁</div>
+          <div style={{ flex:1, fontFamily: F.sans, fontSize: 13.5, color: C.ink, lineHeight: 1.55 }}>
+            <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.clayInk, marginRight: 8 }}>agent · note</span>
+            Two runs left, both in block B. Once run 07 is entered I can give you a provisional read on the temperature × feed interaction — you'll have an answer before the shift ends.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Screen_Entry({ go, project }) {
+  const [y, setY] = React.useState('63.8');
+  const r = { o: 7, T: 200, F: 3.0, blk:'B' };
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'hidden' }}>
+      <TopBar
+        breadcrumb={`projects · ${project.name} · run 07`}
+        title={<>Enter a result</>}
+        actions={<><Btn variant="ghost" onClick={() => go('runsheet')}>Cancel</Btn><Btn variant="primary" icon="check" onClick={() => go('runsheet')}>Save &amp; next</Btn></>}
+        tabs={['Plan','Run-sheet','Data','Analysis','Report']}
+        activeTab="Data"
+        onTab={t => { if (t==='Plan') go('chat'); if (t==='Run-sheet') go('runsheet'); if (t==='Analysis') go('effects'); }}
+      />
+      <div style={{ flex:1, overflow:'auto', padding:'36px 36px 60px', display:'grid', gridTemplateColumns:'1.2fr 1fr', gap: 36 }}>
+        <div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>Run 07 of 08 · block B</div>
+          <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 44, color: C.ink, lineHeight: 1.1, marginBottom: 6 }}>How did run <span style={{ color: C.clayInk }}>07</span> go?</div>
+          <div style={{ fontFamily: F.sans, fontSize: 15, color: C.inkSoft, marginBottom: 32, maxWidth: 52+'ch' }}>The plan called for this combination. Enter the result when the run finishes; you can edit it later if a correction comes back from QC.</div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap: 14, marginBottom: 24 }}>
+            <div style={{ padding:'18px 20px', background: C.paper2, border:`1px solid ${C.ruleSoft}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.inkFaint }}>temperature</div>
+              <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 34, color: C.ink, marginTop: 2 }}>{r.T}<span style={{ fontSize: 18, color: C.inkSoft, fontStyle:'normal', fontFamily: F.mono, marginLeft: 6 }}>°C</span></div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: C.clayInk, marginTop: 4 }}>high · +1</div>
+            </div>
+            <div style={{ padding:'18px 20px', background: C.paper2, border:`1px solid ${C.ruleSoft}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.inkFaint }}>feed rate</div>
+              <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 34, color: C.ink, marginTop: 2 }}>{r.F.toFixed(1)}<span style={{ fontSize: 18, color: C.inkSoft, fontStyle:'normal', fontFamily: F.mono, marginLeft: 6 }}>L/min</span></div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, color: C.inkFaint, marginTop: 4 }}>centre · 0</div>
+            </div>
+          </div>
+
+          <div style={{ padding: 24, background: C.paper, border:`2px solid ${C.ink}`, borderRadius: 12 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint }}>yield · measured</div>
+            <div style={{ display:'flex', alignItems:'baseline', gap: 8, marginTop: 6 }}>
+              <input value={y} onChange={e => setY(e.target.value)} style={{ flex:1, background:'transparent', border:'none', outline:'none', fontFamily: F.serif, fontStyle:'italic', fontSize: 72, color: C.ink, letterSpacing:'-0.02em', width: 160 }}/>
+              <span style={{ fontFamily: F.mono, fontSize: 18, color: C.inkSoft }}>%</span>
+            </div>
+            <div style={{ display:'flex', gap: 12, marginTop: 14, alignItems:'center' }}>
+              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkFaint }}>uncertainty</div>
+              <div style={{ display:'flex', gap: 6 }}>
+                {['± 0.2','± 0.4','± 0.8','± 1.0'].map((u,i) => <span key={u} style={{ fontFamily: F.mono, fontSize: 11, padding:'4px 10px', borderRadius: 999, background: i===1 ? C.ink : C.paper2, color: i===1 ? C.paper : C.inkSoft, border: i===1 ? 'none' : `1px solid ${C.ruleSoft}`, cursor:'pointer' }}>{u}</span>)}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 8 }}>Notes</div>
+            <textarea placeholder="Anything unusual? deviations, colour change, instrument notes…" style={{ width:'100%', minHeight: 76, padding:'12px 14px', background: C.paper2, border:`1px solid ${C.ruleSoft}`, borderRadius: 10, fontFamily: F.sans, fontSize: 13, color: C.ink, resize:'vertical', outline:'none' }}/>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>Where this run sits</div>
+          <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 22 }}>
+            <svg viewBox="0 0 260 220" style={{ width:'100%' }}>
+              <rect x="40" y="20" width="200" height="160" fill="none" stroke={C.rule} strokeDasharray="2 3"/>
+              <g stroke={C.rule} strokeDasharray="1 3">
+                <line x1="140" y1="20" x2="140" y2="180"/><line x1="40" y1="100" x2="240" y2="100"/>
+              </g>
+              <g font-family={F.mono} font-size="9" fill={C.inkFaint}>
+                <text x="40" y="196">160</text><text x="230" y="196">200</text><text x="135" y="196">180 °C</text>
+                <text x="16" y="22">4.0</text><text x="16" y="182">2.0</text><text x="12" y="104">3.0 L/min</text>
+              </g>
+              {/* completed runs */}
+              <circle cx="240" cy="180" r="4.5" fill={C.ink}/>
+              <circle cx="140" cy="100" r="4.5" fill={C.ink}/>
+              <circle cx="40" cy="20" r="4.5" fill={C.ink}/>
+              <circle cx="240" cy="20" r="4.5" fill={C.ink}/>
+              <circle cx="140" cy="100" r="4.5" fill={C.ink}/>
+              <circle cx="40" cy="180" r="4.5" fill={C.ink}/>
+              {/* this run */}
+              <circle cx="240" cy="100" r="9" fill="none" stroke={C.clay} strokeWidth="1.5"/>
+              <circle cx="240" cy="100" r="5" fill={C.clay}/>
+              <text x="252" y="103" font-family={F.mono} font-size="10" fill={C.clayInk}>run 07</text>
+              {/* pending */}
+              <circle cx="140" cy="100" r="4.5" fill="none" stroke={C.inkFaint} strokeDasharray="1 2"/>
+            </svg>
+            <div style={{ display:'flex', gap: 14, marginTop: 14, fontFamily: F.mono, fontSize: 10, color: C.inkFaint }}>
+              <span style={{ display:'inline-flex', alignItems:'center', gap: 6 }}><span style={{ width:7, height:7, borderRadius:'50%', background: C.ink }}/>completed</span>
+              <span style={{ display:'inline-flex', alignItems:'center', gap: 6 }}><span style={{ width:7, height:7, borderRadius:'50%', background: C.clay }}/>this run</span>
+              <span style={{ display:'inline-flex', alignItems:'center', gap: 6 }}><span style={{ width:7, height:7, borderRadius:'50%', background: 'transparent', border:`1px dashed ${C.inkFaint}` }}/>pending</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 18, padding:'14px 18px', background: C.clayTint, border:`1px solid #EBD9C7`, borderRadius: 10, fontFamily: F.sans, fontSize: 13, color: C.ink, lineHeight: 1.55 }}>
+            <span style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.18em', textTransform:'uppercase', color: C.clayInk, display:'block', marginBottom: 4 }}>Agent · expected</span>
+            The model predicts <em style={{ color: C.clayInk, fontFamily: F.serif, fontSize: 16 }}>64.0 ± 1.1 %</em>. Your value sits inside that range — no flag.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+// ==================================
+
+// screens-b.jsx — Effects, Contour, Surface, Settings
+
+
+function Screen_Effects({ go, project }) {
+  const effects = [
+    { name: 'T (temp)',         val:  4.2, err: 0.8, sig: true, dir: 'pos' },
+    { name: 'F (feed)',         val:  2.6, err: 0.8, sig: true, dir: 'pos' },
+    { name: 'T × F',            val: -1.2, err: 0.8, sig: false, dir: 'neg' },
+    { name: 'curvature',        val:  0.4, err: 0.9, sig: false, dir: 'pos' },
+    { name: 'block',            val:  0.3, err: 0.6, sig: false, dir: 'pos' },
+  ];
+  const maxV = 5;
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'hidden' }}>
+      <TopBar
+        breadcrumb={`projects · ${project.name}`}
+        title={<>Effects &amp; <em style={{ color: C.clayInk }}>significance</em></>}
+        actions={<><Btn variant="ghost" size="sm">Model</Btn><Btn variant="ghost" icon="download" size="sm">Export</Btn><Btn variant="primary" onClick={() => go('contour')}>See response surface</Btn></>}
+        tabs={['Plan','Run-sheet','Data','Analysis','Report']}
+        activeTab="Analysis"
+        onTab={t => { if (t==='Plan') go('chat'); if (t==='Run-sheet') go('runsheet'); if (t==='Data') go('entry'); }}
+      />
+      <div style={{ display:'flex', gap: 2, padding:'0 36px', borderBottom:`1px solid ${C.rule}` }}>
+        {[['Effects', true, 'effects'],['Contour',false,'contour'],['3D surface',false,'surface']].map(([n,a,id]) => (
+          <div key={n} onClick={() => go(id)} style={{ padding:'10px 14px', fontFamily: F.mono, fontSize: 11, letterSpacing:'.12em', textTransform:'uppercase', color: a ? C.ink : C.inkFaint, cursor:'pointer', borderBottom: a ? `2px solid ${C.clay}` : '2px solid transparent', marginBottom:-1 }}>{n}</div>
+        ))}
+      </div>
+      <div style={{ flex:1, overflow:'auto', padding:'28px 36px', display:'grid', gridTemplateColumns:'1.4fr 1fr', gap: 28 }}>
+        <div>
+          <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 28 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom: 18 }}>
+              <div>
+                <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint }}>Pareto of effects</div>
+                <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 26, color: C.ink, marginTop: 2 }}>What mattered?</div>
+              </div>
+              <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkFaint }}>α = 0.05 · 95% CI</div>
+            </div>
+            {effects.map((e,i) => {
+              const pct = Math.abs(e.val/maxV) * 50;
+              const barStyle = { position:'absolute', top: 0, bottom:0, width: `${pct}%`,
+                background: e.sig ? (e.dir==='pos' ? C.clay : C.moss) : C.rule, borderRadius: 2 };
+              if (e.val > 0) barStyle.left = '50%'; else barStyle.right = '50%';
+              return (
+                <div key={e.name} style={{ display:'grid', gridTemplateColumns:'140px 1fr 120px', alignItems:'center', gap: 14, padding:'10px 0', borderBottom: i < effects.length-1 ? `1px dashed ${C.ruleSoft}` : 'none' }}>
+                  <div style={{ fontFamily: F.mono, fontSize: 12, color: C.inkSoft }}>{e.name}</div>
+                  <div style={{ position:'relative', height: 14 }}>
+                    <div style={{ position:'absolute', top:'50%', left:0, right:0, height:1, background: C.rule }}/>
+                    <div style={barStyle}/>
+                    <div style={{ position:'absolute', top:-2, bottom:-2, left:'calc(50% + 18%)', borderLeft:`1px dashed ${C.clayInk}`, opacity:.5 }}/>
+                    <div style={{ position:'absolute', top:-2, bottom:-2, left:'calc(50% - 18%)', borderLeft:`1px dashed ${C.clayInk}`, opacity:.5 }}/>
+                  </div>
+                  <div style={{ fontFamily: F.mono, fontSize: 12, color: e.sig ? C.ink : C.inkFaint, textAlign:'right' }}>
+                    {e.val > 0 ? '+' : ''}{e.val.toFixed(1)} ± {e.err.toFixed(1)}
+                    <div style={{ fontSize: 9, color: e.sig ? C.clayInk : C.inkFaint, marginTop: 2 }}>{e.sig ? 'p < 0.01' : 'n.s.'}</div>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.inkFaint, marginTop: 12, textAlign:'center' }}>− effect size on yield (%) +</div>
+          </div>
+
+          <div style={{ marginTop: 22, background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 24 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 12 }}>Interaction · T × F</div>
+            <svg viewBox="0 0 380 180" style={{ width:'100%' }}>
+              <g stroke={C.rule} strokeDasharray="2 3">
+                <line x1="60" y1="20" x2="60" y2="150"/><line x1="340" y1="20" x2="340" y2="150"/>
+                <line x1="60" y1="150" x2="340" y2="150"/>
+              </g>
+              {/* feed lo line */}
+              <polyline points="60,120 340,80" fill="none" stroke={C.ink} strokeWidth="1.5"/>
+              <circle cx="60" cy="120" r="3.5" fill={C.ink}/><circle cx="340" cy="80" r="3.5" fill={C.ink}/>
+              {/* feed hi line */}
+              <polyline points="60,90 340,50" fill="none" stroke={C.clay} strokeWidth="1.5"/>
+              <circle cx="60" cy="90" r="3.5" fill={C.clay}/><circle cx="340" cy="50" r="3.5" fill={C.clay}/>
+              <g fontFamily={F.mono} fontSize="10" fill={C.inkFaint}>
+                <text x="52" y="166">T low · 160°C</text>
+                <text x="312" y="166">T high · 200°C</text>
+                <text x="350" y="54" fill={C.clayInk}>F = 4.0</text>
+                <text x="350" y="84" fill={C.ink}>F = 2.0</text>
+                <text x="20" y="24">65%</text><text x="20" y="154">56%</text>
+              </g>
+            </svg>
+            <div style={{ fontFamily: F.sans, fontSize: 13, color: C.inkSoft, marginTop: 8, lineHeight: 1.55 }}>
+              Lines almost parallel. The bump from higher feed is the same whether temperature is low or high — so there's no interaction worth chasing in this range.
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ background: C.clayTint, border:`1px solid #EBD9C7`, borderRadius: 12, padding: 22 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.clayInk, marginBottom: 10 }}>Agent · reading</div>
+            <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 26, color: C.ink, lineHeight: 1.25, marginBottom: 14 }}>
+              <em style={{ color: C.clayInk }}>Temperature</em> is the main lever. Feed rate helps about half as much, and they nudge against each other at the corners — but not enough to matter.
+            </div>
+            <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink, lineHeight: 1.6 }}>
+              Move to 195°C and 3.2 L/min and you should see <em style={{ color: C.clayInk, fontFamily: F.serif, fontSize: 15 }}>65.8 ± 0.9 %</em> yield — a gain of about 1.5 points over today's operating point.
+            </div>
+          </div>
+
+          <div style={{ marginTop: 18, background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 22 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>Model fit</div>
+            {[['R²','0.96'],['R² adj','0.93'],['RMSE','0.82'],['pure error', '0.61'],['lack of fit','n.s.']].map(([k,v]) => (
+              <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'7px 0', fontFamily: F.mono, fontSize: 12, borderBottom:`1px dashed ${C.ruleSoft}` }}>
+                <span style={{ color: C.inkSoft }}>{k}</span><span style={{ color: C.ink }}>{v}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 18, background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 22 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>Next step</div>
+            <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink, lineHeight: 1.55 }}>
+              A small CCD around (195°C, 3.2 L/min) with 4 axial + 3 centre points would resolve the curvature and tighten the optimum — about 11 more runs.
+            </div>
+            <div style={{ marginTop: 12, display:'flex', gap: 8 }}>
+              <Btn variant="primary" size="sm" icon="plus">Plan follow-up</Btn>
+              <Btn variant="chip" size="sm">Not now</Btn>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Screen_Contour({ go, project }) {
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'hidden' }}>
+      <TopBar
+        breadcrumb={`projects · ${project.name}`}
+        title={<>Response <em style={{ color: C.clayInk }}>surface</em></>}
+        actions={<><Btn variant="ghost" size="sm">Model</Btn><Btn variant="ghost" icon="download" size="sm">Export figure</Btn><Btn variant="primary" onClick={() => go('surface')}>View in 3D</Btn></>}
+        tabs={['Plan','Run-sheet','Data','Analysis','Report']}
+        activeTab="Analysis"
+        onTab={t => { if (t==='Plan') go('chat'); if (t==='Run-sheet') go('runsheet'); if (t==='Data') go('entry'); }}
+      />
+      <div style={{ display:'flex', gap: 2, padding:'0 36px', borderBottom:`1px solid ${C.rule}` }}>
+        {[['Effects', false, 'effects'],['Contour',true,'contour'],['3D surface',false,'surface']].map(([n,a,id]) => (
+          <div key={n} onClick={() => go(id)} style={{ padding:'10px 14px', fontFamily: F.mono, fontSize: 11, letterSpacing:'.12em', textTransform:'uppercase', color: a ? C.ink : C.inkFaint, cursor:'pointer', borderBottom: a ? `2px solid ${C.clay}` : '2px solid transparent', marginBottom:-1 }}>{n}</div>
+        ))}
+      </div>
+      <div style={{ flex:1, overflow:'auto', padding:'28px 36px', display:'grid', gridTemplateColumns:'1fr 320px', gap: 28 }}>
+        <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 30, display:'flex', flexDirection:'column' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom: 18 }}>
+            <div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint }}>yield (%) · contour</div>
+              <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 24, color: C.ink, marginTop: 2 }}>T × Feed · at catalyst = 1.0%</div>
+            </div>
+            <div style={{ display:'flex', gap: 6, alignItems:'center' }}>
+              <span style={{ fontFamily: F.mono, fontSize: 10, color: C.inkFaint }}>show</span>
+              {['runs','model','optimum'].map((t,i) => <span key={t} style={{ fontFamily: F.mono, fontSize: 11, padding:'4px 10px', borderRadius: 999, background: C.paper2, color: C.inkSoft, border:`1px solid ${C.ruleSoft}`, cursor:'pointer' }}>{t}</span>)}
+            </div>
+          </div>
+
+          <svg viewBox="0 0 560 380" style={{ width:'100%', flex:1 }}>
+            <rect x="60" y="20" width="460" height="320" fill={C.paper} stroke={C.rule}/>
+            {/* contour ellipses - centered on optimum ~ (380, 160) */}
+            <g fill="none" strokeWidth="1">
+              <ellipse cx="380" cy="160" rx="260" ry="180" stroke={C.clay} opacity=".25"/>
+              <ellipse cx="380" cy="160" rx="210" ry="145" stroke={C.clay} opacity=".4"/>
+              <ellipse cx="380" cy="160" rx="160" ry="110" stroke={C.clay} opacity=".55"/>
+              <ellipse cx="380" cy="160" rx="115" ry="78" stroke={C.clay} opacity=".7"/>
+              <ellipse cx="380" cy="160" rx="72" ry="48" stroke={C.clayInk} opacity=".85"/>
+              <ellipse cx="380" cy="160" rx="34" ry="22" stroke={C.clayInk}/>
+            </g>
+            {/* labels on contours */}
+            <g fontFamily={F.mono} fontSize="10" fill={C.clayInk}>
+              <text x="110" y="50">58</text><text x="160" y="80">60</text><text x="220" y="106">62</text><text x="275" y="128">64</text><text x="345" y="148">65</text>
+            </g>
+            {/* run points */}
+            <g>
+              <circle cx="85" cy="340" r="4.5" fill={C.ink}/>{/* 160,2.0 */}
+              <circle cx="85" cy="20" r="4.5" fill={C.ink}/>{/* 160,4.0 */}
+              <circle cx="520" cy="340" r="4.5" fill={C.ink}/>{/* 200,2.0 */}
+              <circle cx="520" cy="20" r="4.5" fill={C.ink}/>{/* 200,4.0 */}
+              <circle cx="300" cy="180" r="4.5" fill={C.ink}/>{/* cp */}
+              <circle cx="300" cy="180" r="7" fill="none" stroke={C.ink} strokeWidth="0.8"/>
+            </g>
+            {/* optimum */}
+            <g>
+              <circle cx="380" cy="160" r="6" fill={C.clay}/>
+              <circle cx="380" cy="160" r="12" fill="none" stroke={C.clay} strokeWidth="1" opacity=".5"/>
+              <text x="394" y="164" fontFamily={F.mono} fontSize="10" fill={C.clayInk}>max · 65.8%</text>
+            </g>
+            {/* axes */}
+            <g fontFamily={F.mono} fontSize="10" fill={C.inkFaint}>
+              <text x="76" y="360">160</text><text x="290" y="360">180</text><text x="508" y="360">200</text>
+              <text x="250" y="372" style={{ fontSize: 10 }}>Temperature (°C) →</text>
+              <text x="30" y="344">2.0</text><text x="30" y="184">3.0</text><text x="30" y="24">4.0</text>
+              <g transform="translate(18,200) rotate(-90)"><text x="0" y="0">Feed (L/min) ↑</text></g>
+            </g>
+          </svg>
+
+          {/* legend */}
+          <div style={{ display:'flex', alignItems:'center', gap: 18, marginTop: 18, fontFamily: F.mono, fontSize: 10, color: C.inkFaint }}>
+            <div style={{ display:'flex', alignItems:'center', gap: 6 }}>
+              <div style={{ width: 120, height: 10, background: `linear-gradient(to right, ${C.paper2}, ${C.clayTint}, ${C.clay}, ${C.clayInk})`, borderRadius: 2 }}/>
+              <span>lo</span><span style={{ marginLeft:'auto' }}>hi</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap: 6 }}><span style={{ width:7, height:7, borderRadius:'50%', background: C.ink, display:'inline-block' }}/>run</div>
+            <div style={{ display:'flex', alignItems:'center', gap: 6 }}><span style={{ width:9, height:9, borderRadius:'50%', background: C.clay, display:'inline-block' }}/>predicted max</div>
+          </div>
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap: 16 }}>
+          <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 20 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>Predicted optimum</div>
+            <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 46, color: C.ink, lineHeight: 1 }}>65.8<span style={{ fontSize: 22, color: C.inkSoft, fontFamily: F.mono, fontStyle:'normal', marginLeft: 6 }}>%</span></div>
+            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.clayInk, marginTop: 4 }}>± 0.9 · 95% CI</div>
+            <div style={{ marginTop: 14, fontFamily: F.mono, fontSize: 12, color: C.inkSoft, lineHeight: 1.7 }}>
+              <div>T = <span style={{ color: C.ink }}>195.2 °C</span></div>
+              <div>F = <span style={{ color: C.ink }}>3.22 L/min</span></div>
+            </div>
+          </div>
+
+          <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 20 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>Desirability</div>
+            <div style={{ height: 8, background: C.paper3, borderRadius: 4, overflow:'hidden', marginBottom: 8 }}>
+              <div style={{ width:'82%', height:'100%', background: C.moss }}/>
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 11, color: C.inkSoft }}>d = 0.82 · max yield, within spec (≥ 60%)</div>
+          </div>
+
+          <div style={{ background: C.clayTint, border:`1px solid #EBD9C7`, borderRadius: 12, padding: 20 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.clayInk, marginBottom: 8 }}>Caveat</div>
+            <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink, lineHeight: 1.55 }}>
+              This is a first-order model with no curvature term. The optimum above is extrapolated to the corner — a central composite would tell you whether the peak is flatter, or further inside.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Screen_Surface({ go, project }) {
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'hidden' }}>
+      <TopBar
+        breadcrumb={`projects · ${project.name}`}
+        title={<>3D surface</>}
+        actions={<><Btn variant="ghost" size="sm">Rotate</Btn><Btn variant="ghost" icon="download" size="sm">Export</Btn><Btn variant="primary" onClick={() => go('effects')}>Back to effects</Btn></>}
+        tabs={['Plan','Run-sheet','Data','Analysis','Report']}
+        activeTab="Analysis"
+        onTab={t => { if (t==='Plan') go('chat'); if (t==='Run-sheet') go('runsheet'); if (t==='Data') go('entry'); }}
+      />
+      <div style={{ display:'flex', gap: 2, padding:'0 36px', borderBottom:`1px solid ${C.rule}` }}>
+        {[['Effects', false, 'effects'],['Contour',false,'contour'],['3D surface',true,'surface']].map(([n,a,id]) => (
+          <div key={n} onClick={() => go(id)} style={{ padding:'10px 14px', fontFamily: F.mono, fontSize: 11, letterSpacing:'.12em', textTransform:'uppercase', color: a ? C.ink : C.inkFaint, cursor:'pointer', borderBottom: a ? `2px solid ${C.clay}` : '2px solid transparent', marginBottom:-1 }}>{n}</div>
+        ))}
+      </div>
+      <div style={{ flex:1, overflow:'auto', padding:'28px 36px', display:'grid', gridTemplateColumns:'1fr 300px', gap: 28 }}>
+        <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 30 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom: 18 }}>
+            <div>
+              <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint }}>yield surface · isometric</div>
+              <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 24, color: C.ink, marginTop: 2 }}>What the answer looks like</div>
+            </div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, color: C.inkFaint }}>view · 25° elev · 40° azim</div>
+          </div>
+          <svg viewBox="0 0 720 480" style={{ width:'100%', aspectRatio:'3/2' }}>
+            {/* ground grid */}
+            <g stroke={C.rule} strokeWidth="0.7" fill="none">
+              {Array.from({length:9}).map((_,i) => {
+                const t = i/8;
+                // a simple axonometric grid
+                const x1 = 100 + t*360, y1 = 380 - t*90;
+                const x2 = 460 + t*0,   y2 = 290 - t*0;
+                // line along F
+                return null;
+              })}
+            </g>
+            {/* mesh surface - parametric grid of small polygons */}
+            {(() => {
+              const cells = [];
+              const nx = 10, ny = 10;
+              // yield model ~ 56 + (T+1)/2 * 4.2 + (F+1)/2 * 2.6 - 1.2*T*F (scaled)
+              const proj = (ix, iy) => {
+                const u = ix/nx, v = iy/ny;
+                const T = -1 + 2*u, F = -1 + 2*v;
+                const y = 60 + 2.1*T + 1.3*F - 0.6*T*F + 2.8*(1 - ((T-0.8)**2 + (F-0.4)**2));
+                // isometric
+                const baseX = 120 + u*460;
+                const baseY = 400 - v*80 - (1-u)*30;
+                const h = (y - 55) * 7;
+                return { x: baseX, y: baseY - h, yield: y };
+              };
+              // base grid (no height) for plane
+              for (let iy = 0; iy < ny; iy++) for (let ix = 0; ix < nx; ix++) {
+                const p00 = proj(ix, iy), p10 = proj(ix+1, iy), p11 = proj(ix+1, iy+1), p01 = proj(ix, iy+1);
+                const avg = (p00.yield + p10.yield + p11.yield + p01.yield)/4;
+                // map yield 56..66 -> color
+                const t = Math.max(0, Math.min(1, (avg-56)/10));
+                const r = Math.round(245 - t*140);
+                const g = Math.round(236 - t*110);
+                const b = Math.round(226 - t*145);
+                cells.push(
+                  <polygon key={`${ix}-${iy}`} points={`${p00.x},${p00.y} ${p10.x},${p10.y} ${p11.x},${p11.y} ${p01.x},${p01.y}`} fill={`rgb(${r},${g},${b})`} stroke={C.clay} strokeWidth="0.4" strokeOpacity=".5"/>
+                );
+              }
+              return cells;
+            })()}
+            {/* axes */}
+            <g fontFamily={F.mono} fontSize="10" fill={C.inkFaint}>
+              <line x1="120" y1="400" x2="580" y2="320" stroke={C.ink} strokeWidth="1"/>
+              <line x1="120" y1="400" x2="120" y2="120" stroke={C.ink} strokeWidth="1"/>
+              <line x1="120" y1="400" x2="90" y2="430" stroke={C.ink} strokeWidth="1"/>
+              <text x="560" y="340">T →</text>
+              <text x="96" y="120">Yield ↑</text>
+              <text x="60" y="442">Feed</text>
+              <text x="104" y="124">66%</text>
+              <text x="104" y="392">56%</text>
+            </g>
+            {/* peak marker */}
+            <circle cx="500" cy="168" r="5" fill={C.clay}/>
+            <line x1="500" y1="168" x2="500" y2="330" stroke={C.clay} strokeDasharray="2 3" strokeWidth="1"/>
+            <text x="510" y="170" fontFamily={F.mono} fontSize="10" fill={C.clayInk}>peak · 65.8%</text>
+            {/* run points as marks */}
+            <g fill={C.ink}>
+              <circle cx="130" cy="388" r="3.5"/>
+              <circle cx="540" cy="312" r="3.5"/>
+              <circle cx="150" cy="292" r="3.5"/>
+              <circle cx="560" cy="220" r="3.5"/>
+              <circle cx="320" cy="304" r="3.5"/>
+            </g>
+          </svg>
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop: 10, fontFamily: F.mono, fontSize: 10, color: C.inkFaint }}>
+            <div style={{ display:'flex', gap: 14 }}>
+              <span>drag to rotate</span><span>scroll to zoom</span>
+            </div>
+            <span>held: catalyst = 1.0%</span>
+          </div>
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap: 16 }}>
+          <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 20 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 12 }}>Slice · hold</div>
+            {[['Catalyst','1.0 %', 'fixed'],['T window','160–200 °C','full'],['F window','2.0–4.0 L/min','full']].map(([k,v,h]) => (
+              <div key={k} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', fontFamily: F.mono, fontSize: 12, borderBottom:`1px dashed ${C.ruleSoft}` }}>
+                <span style={{ color: C.inkSoft }}>{k}</span>
+                <span style={{ color: C.ink }}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12, padding: 20 }}>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 10 }}>What to look at</div>
+            <div style={{ fontFamily: F.sans, fontSize: 13, color: C.ink, lineHeight: 1.55 }}>
+              The surface is mostly a plane tilting up toward high T and mid-high F. A gentle shoulder suggests a small curvature the first-order model can't quite capture — which is where a follow-up would earn its runs.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Screen_Settings({ go, project }) {
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background: C.paper, overflow:'hidden' }}>
+      <TopBar
+        breadcrumb="workspace · Reactor B team"
+        title={<>Settings</>}
+        actions={<><Btn variant="ghost" size="sm">Reset</Btn><Btn variant="primary">Save changes</Btn></>}
+      />
+      <div style={{ flex:1, overflow:'auto', padding:'28px 36px 60px', display:'grid', gridTemplateColumns:'200px 1fr', gap: 40 }}>
+        <div style={{ display:'flex', flexDirection:'column', gap: 4 }}>
+          {['Workspace','Members &amp; roles','Agent behaviour','Integrations','Data &amp; security','Billing'].map((s, i) => (
+            <div key={s} style={{ padding:'10px 14px', borderRadius: 8, fontFamily: F.sans, fontSize: 13, color: i===2 ? C.clayInk : C.inkSoft, background: i===2 ? C.clayTint : 'transparent', cursor:'pointer' }} dangerouslySetInnerHTML={{ __html: s }}/>
+          ))}
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap: 24, maxWidth: 680 }}>
+          <div>
+            <div style={{ fontFamily: F.mono, fontSize: 10, letterSpacing:'.22em', textTransform:'uppercase', color: C.inkFaint, marginBottom: 6 }}>Agent behaviour</div>
+            <div style={{ fontFamily: F.serif, fontStyle:'italic', fontSize: 32, color: C.ink, lineHeight: 1.1, marginBottom: 10 }}>How should the agent <em style={{ color: C.clayInk }}>speak</em>?</div>
+            <div style={{ fontFamily: F.sans, fontSize: 14, color: C.inkSoft, lineHeight: 1.55, maxWidth: 56+'ch' }}>
+              These defaults shape every plan draft, every read of the data, and every suggested next step. You can override them per experiment.
+            </div>
+          </div>
+
+          {[
+            { k:'Plan size', val:'Smallest that answers', opts:['Smallest that answers','Balanced','Exhaustive'], sel: 0, desc:'Prefer 8-run screens before 30-run composites. Agent will suggest follow-ups only when warranted.' },
+            { k:'Randomisation', val:'Blocked by shift', opts:['None','Full','Blocked by shift','Custom'], sel: 2, desc:'Divides run order into blocks to absorb known sources of drift.' },
+            { k:'Significance threshold', val:'α = 0.05', opts:['0.01','0.05','0.10','custom'], sel: 1, desc:'The p-value cutoff for calling an effect significant.' },
+            { k:'Units system', val:'Metric', opts:['Metric','US customary','Mixed'], sel: 0 },
+            { k:'Report language', val:'English (plain)', opts:['English (plain)','English (technical)','Português','Deutsch'], sel: 0 },
+          ].map(s => (
+            <div key={s.k} style={{ padding:'20px 22px', background: C.paper2, border:`1px solid ${C.ruleSoft}`, borderRadius: 12 }}>
+              <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom: 10 }}>
+                <div style={{ fontFamily: F.sans, fontSize: 14, fontWeight: 500, color: C.ink }}>{s.k}</div>
+                <div style={{ fontFamily: F.mono, fontSize: 11, color: C.clayInk }}>{s.val}</div>
+              </div>
+              <div style={{ display:'flex', gap: 6, flexWrap:'wrap' }}>
+                {s.opts.map((o, i) => (
+                  <span key={o} style={{ fontFamily: F.mono, fontSize: 11, padding:'5px 11px', borderRadius: 999, background: i===s.sel ? C.ink : C.paper, color: i===s.sel ? C.paper : C.inkSoft, border: i===s.sel ? 'none' : `1px solid ${C.ruleSoft}`, cursor:'pointer' }}>{o}</span>
+                ))}
+              </div>
+              {s.desc && <div style={{ fontFamily: F.sans, fontSize: 12, color: C.inkFaint, marginTop: 10, lineHeight: 1.55 }}>{s.desc}</div>}
+            </div>
+          ))}
+
+          <div style={{ padding:'20px 22px', background: C.paper, border:`1px solid ${C.ruleSoft}`, borderRadius: 12 }}>
+            <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom: 4 }}>
+              <div style={{ fontFamily: F.sans, fontSize: 14, fontWeight: 500, color: C.ink }}>Use project data to improve shared models</div>
+              <div style={{ width: 40, height: 22, borderRadius: 999, background: C.paper3, position:'relative', cursor:'pointer' }}>
+                <div style={{ position:'absolute', top: 2, left: 2, width: 18, height: 18, borderRadius:'50%', background: C.paper, boxShadow:'0 1px 2px rgba(0,0,0,.1)' }}/>
+              </div>
+            </div>
+            <div style={{ fontFamily: F.sans, fontSize: 12, color: C.inkFaint, lineHeight: 1.55 }}>Off by default. We never use your project data to train shared models unless you opt in.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+// ==================================
+// App bootstrap
+// ==================================
+
+const SCREENS = [
+  { id:'projects',  label:'Projects' },
+  { id:'empty',     label:'New · empty' },
+  { id:'chat',      label:'Agent chat' },
+  { id:'runsheet',  label:'Run-sheet' },
+  { id:'entry',     label:'Enter result' },
+  { id:'effects',   label:'Effects' },
+  { id:'contour',   label:'Contour' },
+  { id:'surface',   label:'3D surface' },
+  { id:'settings',  label:'Settings' },
+];
+
+function App() {
+  const init = (typeof localStorage !== 'undefined' && localStorage.getItem('factorial:screen')) || 'projects';
+  const [screen, setScreen] = React.useState(init);
+  const [history, setHistory] = React.useState([init]);
+  const [hIdx, setHIdx] = React.useState(0);
+
+  const go = (s) => {
+    const next = history.slice(0, hIdx+1); next.push(s);
+    setHistory(next); setHIdx(next.length-1); setScreen(s);
+    try { localStorage.setItem('factorial:screen', s); } catch(e){}
+  };
+  const back = () => { if (hIdx > 0) { const ni = hIdx-1; setHIdx(ni); setScreen(history[ni]); } };
+  const fwd  = () => { if (hIdx < history.length-1) { const ni = hIdx+1; setHIdx(ni); setScreen(history[ni]); } };
+
+  const project = { name: 'Yield · Reactor B', meta: '2² · 8 runs · 6 done' };
+  const inProject = !['projects','empty','settings'].includes(screen);
+
+  const urlMap = {
+    projects:'/projects', empty:'/projects/new', chat:'/yield-q2/plan', runsheet:'/yield-q2/runs',
+    entry:'/yield-q2/runs/07', effects:'/yield-q2/analysis/effects',
+    contour:'/yield-q2/analysis/contour', surface:'/yield-q2/analysis/surface', settings:'/settings',
+  };
+
+  const map = {
+    projects: <Screen_Projects go={go}/>,
+    empty: <Screen_Empty go={go}/>,
+    chat: <Screen_Chat go={go} project={project}/>,
+    runsheet: <Screen_Runsheet go={go} project={project}/>,
+    entry: <Screen_Entry go={go} project={project}/>,
+    effects: <Screen_Effects go={go} project={project}/>,
+    contour: <Screen_Contour go={go} project={project}/>,
+    surface: <Screen_Surface go={go} project={project}/>,
+    settings: <Screen_Settings go={go}/>,
+  };
+
+  return (
+    <div className="stage">
+      <div className="proto-meta">
+        <span className="dot"></span><span>Prototype · v1</span>
+        <span>·</span>
+        <span className="crumb">factori.al · in-app</span>
+      </div>
+      <Chrome url={urlMap[screen]} onBack={back} onForward={fwd}>
+        <Sidebar current={screen} go={go} project={inProject ? project : null}/>
+        {map[screen]}
+      </Chrome>
+      <div className="screen-nav">
+        {SCREENS.map(s => (
+          <span key={s.id} className={screen===s.id?'active':''} onClick={() => go(s.id)}>{s.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+</script>
+</body>
+</html>
