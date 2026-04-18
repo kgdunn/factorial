@@ -2,6 +2,7 @@
   import { chatState } from '$lib/state/chat.svelte';
   import { experimentsState } from '$lib/state/experiments.svelte';
   import MessageBubble from './MessageBubble.svelte';
+  import Btn from './brand/Btn.svelte';
 
   let messageList: HTMLDivElement | undefined = $state();
   let inputText = $state('');
@@ -10,18 +11,16 @@
   const SCROLL_THRESHOLD = 60;
 
   const SUGGESTED_PROMPTS = [
-    'Create a 2^3 factorial design for optimizing a chemical reaction',
-    'What is a response surface methodology?',
-    'Help me analyze my experimental results with a Pareto chart',
+    'Yield vs T, feed, catalyst',
+    'Binder formulation · 3 components',
+    'Coating thickness · line 3',
+    'Sensory panel · brine time × salt',
   ];
 
-  // Auto-scroll to bottom when new content arrives during streaming
   $effect(() => {
-    // Access messages length and streaming state to establish dependency
     const len = chatState.messages.length;
     const streaming = chatState.isStreaming;
     if (len > 0 && !userScrolledUp && messageList) {
-      // Use void to suppress unused variable warnings
       void streaming;
       requestAnimationFrame(() => {
         messageList?.scrollTo({ top: messageList.scrollHeight, behavior: 'smooth' });
@@ -56,27 +55,31 @@
   }
 </script>
 
-<div class="flex h-full flex-col bg-white">
-  <!-- Message list -->
+<div class="flex h-full flex-col bg-paper">
   <div
     bind:this={messageList}
-    class="flex-1 overflow-y-auto px-4 py-6"
+    class="flex-1 overflow-y-auto px-9 py-7"
     onscroll={handleScroll}
   >
     {#if chatState.messages.length === 0}
-      <!-- Empty state -->
       <div class="flex h-full flex-col items-center justify-center text-center">
-        <div class="mb-6">
-          <h2 class="text-2xl font-semibold text-gray-800">Agentic DOE Assistant</h2>
-          <p class="mt-2 text-gray-500">
-            Design, analyse, and visualise experiments with AI guidance.
+        <div class="mb-9 max-w-xl">
+          <div class="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-faint">
+            new experiment · blank
+          </div>
+          <h2 class="mt-2 font-serif italic text-[40px] leading-tight text-ink">
+            Describe the process you want to <em class="text-clay-ink">understand</em>.
+          </h2>
+          <p class="mt-4 font-sans text-[15px] leading-relaxed text-ink-soft">
+            Name the response, the factors, and roughly how many runs you can
+            afford. The agent will draft a plan and defend the choice.
           </p>
         </div>
-        <div class="grid w-full max-w-lg gap-3">
-          {#each SUGGESTED_PROMPTS as prompt}
+        <div class="flex flex-wrap justify-center gap-2.5">
+          {#each SUGGESTED_PROMPTS as prompt (prompt)}
             <button
-              class="rounded-lg border border-gray-200 px-4 py-3 text-left text-sm text-gray-600
-                     hover:border-primary hover:bg-blue-50 hover:text-primary transition-colors"
+              type="button"
+              class="cursor-pointer rounded-full border border-rule-soft bg-paper px-3 py-1.5 font-sans text-xs text-ink-soft transition-colors hover:bg-paper-2"
               onclick={() => handlePromptClick(prompt)}
             >
               {prompt}
@@ -85,7 +88,7 @@
         </div>
       </div>
     {:else}
-      <div class="mx-auto max-w-3xl">
+      <div class="mx-auto flex max-w-3xl flex-col gap-2">
         {#each chatState.messages as message, i (message.id)}
           <MessageBubble
             {message}
@@ -100,72 +103,61 @@
     {/if}
   </div>
 
-  <!-- Experiment created notification -->
   {#if experimentsState.lastCreated}
-    <div class="mx-4 mb-2 flex items-center justify-between rounded-lg bg-blue-50 px-4 py-2 text-sm text-primary">
+    <div
+      class="mx-9 mb-2 flex items-center justify-between rounded-xl border border-[#EBD9C7] bg-clay-tint px-4 py-2.5 font-sans text-sm text-clay-ink"
+    >
       <span>
-        Experiment saved: <strong>{experimentsState.lastCreated.name}</strong>
+        <span class="font-mono text-[10px] uppercase tracking-[0.18em]">experiment saved</span>
+        &nbsp;·&nbsp;<strong class="font-serif italic text-base text-ink">{experimentsState.lastCreated.name}</strong>
       </span>
       <div class="flex items-center gap-2">
-        <a
-          href="/experiments/{experimentsState.lastCreated.experiment_id}"
-          class="rounded bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary-dark"
-        >
+        <Btn variant="primary" size="sm" href="/experiments/{experimentsState.lastCreated.experiment_id}">
           View
-        </a>
+        </Btn>
         <button
-          class="text-xs text-gray-400 hover:text-gray-600"
+          type="button"
+          class="cursor-pointer font-mono text-[11px] text-ink-faint hover:text-ink"
           onclick={() => experimentsState.dismissNotification()}
         >
-          Dismiss
+          dismiss
         </button>
       </div>
     </div>
   {/if}
 
-  <!-- Error banner -->
   {#if chatState.error}
-    <div class="mx-4 mb-2 flex items-center justify-between rounded-lg bg-red-50 px-4 py-2 text-sm text-negative">
+    <div
+      class="mx-9 mb-2 flex items-center justify-between rounded-xl border border-[color:var(--color-negative)]/30 bg-[#FBECE8] px-4 py-2.5 font-sans text-sm text-[color:var(--color-negative)]"
+    >
       <span>{chatState.error}</span>
-      <button
-        class="ml-4 rounded bg-negative px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
-        onclick={() => chatState.retryLastMessage()}
-      >
-        Retry
-      </button>
+      <Btn variant="clay" size="sm" onclick={() => chatState.retryLastMessage()}>Retry</Btn>
     </div>
   {/if}
 
-  <!-- Input area -->
-  <div class="border-t border-gray-200 bg-white px-4 py-3">
-    <div class="mx-auto flex max-w-3xl items-end gap-3">
-      <textarea
-        class="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm
-               placeholder-gray-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary
-               disabled:bg-gray-50 disabled:text-gray-400"
-        rows="1"
-        placeholder="Ask about experimental design..."
+  <div class="border-t border-rule bg-paper px-9 pb-5 pt-4">
+    <div
+      class="mx-auto flex max-w-3xl items-center gap-3 rounded-xl border border-rule-soft bg-paper-2 px-4 py-3.5"
+    >
+      <input
+        class="flex-1 border-none bg-transparent font-sans text-sm text-ink outline-none placeholder:text-ink-faint"
+        placeholder="Ask the agent anything — &quot;why resolution V?&quot;, &quot;swap to Box-Behnken&quot;, &quot;add a block for shift&quot;"
         bind:value={inputText}
         onkeydown={handleKeydown}
         disabled={chatState.isStreaming}
-      ></textarea>
-
+      />
       {#if chatState.isStreaming}
-        <button
-          class="flex-shrink-0 rounded-lg bg-neutral px-4 py-2 text-sm font-medium text-white hover:bg-gray-600"
-          onclick={() => chatState.cancelStream()}
-        >
-          Cancel
-        </button>
+        <Btn variant="ghost" size="sm" onclick={() => chatState.cancelStream()}>Cancel</Btn>
       {:else}
-        <button
-          class="flex-shrink-0 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white
-                 hover:bg-primary-dark disabled:bg-gray-300 disabled:cursor-not-allowed"
+        <Btn
+          variant="primary"
+          size="sm"
+          icon="arrow"
           onclick={handleSend}
           disabled={!inputText.trim()}
         >
           Send
-        </button>
+        </Btn>
       {/if}
     </div>
   </div>
