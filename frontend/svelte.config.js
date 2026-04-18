@@ -8,7 +8,19 @@ const config = {
 			assets: 'build',
 			fallback: 'index.html',
 			precompress: false
-		})
+		}),
+		csp: {
+			mode: 'hash',
+			directives: {
+				'default-src': ['self'],
+				'script-src': ['self'],
+				'style-src': ['self', 'unsafe-inline'],
+				'img-src': ['self', 'data:', 'https:'],
+				'font-src': ['self'],
+				'connect-src': ['self'],
+				'frame-ancestors': ['none']
+			}
+		}
 	}
 };
 
