@@ -83,19 +83,23 @@ async def approve_signup(
     new_role_name: str | None = None,
     new_role_description: str | None = None,
 ) -> SignupRequest:
-    """Approve a signup request, optionally assigning or creating a role.
+    """Approve a signup request. A role assignment is **mandatory**.
 
-    The caller passes exactly one of: ``role_id`` (use existing role),
-    ``new_role_name`` (create a new role as part of approval), or
-    neither (approve without a role).
+    Pass exactly one of:
+    - ``role_id`` to use an existing role, or
+    - ``new_role_name`` (+ optional ``new_role_description``) to create
+      a new role as part of approval.
 
     Raises
     ------
     ValueError
-        Signup not found, not pending, or role arguments invalid.
+        Signup not found, not pending, both role arguments given, or
+        neither given.
     """
     if role_id is not None and new_role_name is not None:
         raise ValueError("Pass either role_id or new_role, not both")  # noqa: TRY003
+    if role_id is None and new_role_name is None:
+        raise ValueError("A role is required to approve a signup")  # noqa: TRY003
 
     signup = await db.get(SignupRequest, signup_id)
     if not signup:
@@ -103,19 +107,20 @@ async def approve_signup(
     if signup.status != "pending":
         raise ValueError(f"Signup is already {signup.status}")  # noqa: TRY003
 
-    resolved_role: Role | None = None
+    resolved_role: Role
     if new_role_name is not None:
         resolved_role = await role_service.create_role(db, new_role_name, new_role_description)
-    elif role_id is not None:
-        resolved_role = await role_service.get_role(db, role_id)
-        if resolved_role is None:
+    else:
+        assert role_id is not None  # narrowed above
+        existing = await role_service.get_role(db, role_id)
+        if existing is None:
             raise ValueError("Role not found")  # noqa: TRY003
+        resolved_role = existing
 
     signup.status = "approved"
     signup.invite_token = secrets.token_urlsafe(32)
     signup.invite_expires_at = datetime.now(UTC) + timedelta(hours=settings.invite_token_expire_hours)
-    if resolved_role is not None:
-        signup.role_id = resolved_role.id
+    signup.role_id = resolved_role.id
     await db.flush()
     return signup
 

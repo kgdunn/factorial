@@ -18,7 +18,8 @@
   let actionMessage = $state<string | null>(null);
 
   // Per-card approval state — keyed by signup id.
-  let approveMode = $state<Record<string, 'idle' | 'existing' | 'new' | 'none'>>({});
+  // Mode is 'existing' (pick an existing role) or 'new' (create one).
+  let approveMode = $state<Record<string, 'existing' | 'new'>>({});
   let approveRoleId = $state<Record<string, string>>({});
   let approveNewName = $state<Record<string, string>>({});
   let approveNewDesc = $state<Record<string, string>>({});
@@ -37,26 +38,24 @@
       const res = await getAdminSignups(statusFilter, currentPage, pageSize);
       signups = res.signups;
       total = res.total;
-      // Prefill approveRoleId with the matched existing role where possible.
+      // Prefill approval controls from the applicant's requested_role.
       for (const s of signups) {
-        if (!(s.id in approveMode)) {
-          if (s.role) {
-            approveMode[s.id] = 'existing';
-            approveRoleId[s.id] = s.role.id;
-          } else if (s.requested_role && !s.requested_role.startsWith('other')) {
-            const match = roles.find((r) => r.name === s.requested_role);
-            if (match) {
-              approveMode[s.id] = 'existing';
-              approveRoleId[s.id] = match.id;
-            } else {
-              approveMode[s.id] = 'idle';
-            }
-          } else if (s.requested_role?.startsWith('other:')) {
-            approveMode[s.id] = 'new';
-            approveNewName[s.id] = s.requested_role.slice('other:'.length).trim();
-          } else {
-            approveMode[s.id] = 'idle';
-          }
+        if (s.id in approveMode) continue;
+        if (s.role) {
+          approveMode[s.id] = 'existing';
+          approveRoleId[s.id] = s.role.id;
+          continue;
+        }
+        if (s.requested_role?.toLowerCase().startsWith('other:')) {
+          approveMode[s.id] = 'new';
+          approveNewName[s.id] = '';
+          approveNewDesc[s.id] = s.requested_role.slice('other:'.length).trim();
+        } else if (s.requested_role) {
+          const match = roles.find((r) => r.name === s.requested_role);
+          approveMode[s.id] = 'existing';
+          if (match) approveRoleId[s.id] = match.id;
+        } else {
+          approveMode[s.id] = 'existing';
         }
       }
     } catch (err) {
@@ -76,25 +75,31 @@
     loadSignups();
   });
 
-  function buildApproveBody(id: string): SignupApproveBody {
-    const mode = approveMode[id] ?? 'idle';
-    if (mode === 'existing' && approveRoleId[id]) {
-      return { role_id: approveRoleId[id] };
+  function buildApproveBody(id: string): SignupApproveBody | null {
+    const mode = approveMode[id] ?? 'existing';
+    if (mode === 'existing') {
+      const rid = approveRoleId[id];
+      return rid ? { role_id: rid } : null;
     }
-    if (mode === 'new') {
-      const name = (approveNewName[id] || '').trim();
-      if (name) {
-        return { new_role: { name, description: approveNewDesc[id]?.trim() || null } };
-      }
-    }
-    return {};
+    const name = (approveNewName[id] || '').trim();
+    if (!name) return null;
+    return { new_role: { name, description: approveNewDesc[id]?.trim() || null } };
+  }
+
+  function canApprove(id: string): boolean {
+    return buildApproveBody(id) !== null;
   }
 
   async function handleApprove(id: string) {
     actionMessage = null;
     error = null;
+    const body = buildApproveBody(id);
+    if (!body) {
+      error = 'Pick an existing role or give a name for a new one before approving.';
+      return;
+    }
     try {
-      await postApproveSignup(id, buildApproveBody(id));
+      await postApproveSignup(id, body);
       actionMessage = 'Approved — invite email sent.';
       await loadSignups();
     } catch (err) {
@@ -211,7 +216,9 @@
                 <div class="flex shrink-0 gap-2">
                   <button
                     onclick={() => handleApprove(signup.id)}
-                    class="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition-colors"
+                    disabled={!canApprove(signup.id)}
+                    title={canApprove(signup.id) ? '' : 'Pick a role below before approving'}
+                    class="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Approve
                   </button>
@@ -227,6 +234,7 @@
 
             {#if signup.status === 'pending'}
               <div class="mt-3 border-t border-gray-100 pt-3 space-y-2">
+                <p class="text-xs font-medium text-gray-700">Role (required)</p>
                 <div class="flex items-center gap-3 text-xs">
                   <label class="inline-flex items-center gap-1">
                     <input type="radio" name="mode-{signup.id}" value="existing" bind:group={approveMode[signup.id]} />
@@ -235,10 +243,6 @@
                   <label class="inline-flex items-center gap-1">
                     <input type="radio" name="mode-{signup.id}" value="new" bind:group={approveMode[signup.id]} />
                     <span>Create new role</span>
-                  </label>
-                  <label class="inline-flex items-center gap-1">
-                    <input type="radio" name="mode-{signup.id}" value="idle" bind:group={approveMode[signup.id]} />
-                    <span>Approve without role</span>
                   </label>
                 </div>
 

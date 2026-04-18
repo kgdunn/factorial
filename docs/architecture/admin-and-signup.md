@@ -74,9 +74,10 @@ End‑to‑end, for a non‑admin user:
 
 Key properties:
 
-- **`signup_requests.requested_role`** is free text. It is what the applicant *asked* for — typically a slug from the roles list, or an `other:<freetext>` string when they picked "Other". The admin never trusts this directly.
-- **`signup_requests.role_id`** is the *decided* role. It is set by the admin at approval time. The admin can (a) assign an existing role, (b) create a brand new role as part of the approval, or (c) leave it null. The user's final `users.role_id` is copied from here on registration.
-- The admin UI shows the applicant's `requested_role` next to a role dropdown and a "Create new role from this request" control. Nothing is auto‑created — the admin makes the call.
+- **Role is mandatory.** The applicant must pick a role at signup (or pick "Other" and describe their role in free text); the admin must assign a role (existing or newly created) at approval. Role is used in the LLM system prompt, so we require it up front.
+- **`signup_requests.requested_role`** is what the applicant *asked* for — a slug from the roles list, or an `other:<freetext>` string when they picked "Other". The admin never trusts this directly.
+- **`signup_requests.role_id`** is the *decided* role. It is set by the admin at approval time: either assign an existing role or create a brand new role as part of the approval. The user's final `users.role_id` is copied from here on registration.
+- The admin UI shows the applicant's `requested_role` next to a role dropdown and a "Create new role from this request" control. Nothing is auto‑created — the admin makes the call. The Approve button is disabled until a role choice is valid.
 - `signup_requests.email` is unique at the "in‑flight" stage (pending/approved). Once a user registers, the signup row stays as an audit record but the email is now also on `users.email`.
 - Rejected signups can be re‑submitted after an admin clears the old row (or we relax the uniqueness — not done yet).
 

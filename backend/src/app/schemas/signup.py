@@ -5,18 +5,36 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class SignupSubmitRequest(BaseModel):
-    """Public signup request payload."""
+    """Public signup request payload.
+
+    ``requested_role`` is mandatory. Either:
+    - a role slug from ``GET /roles`` (e.g. ``"chemical_engineer"``), or
+    - ``"other:<freetext>"`` when the applicant picked "Other" and typed
+      a description the admin can decipher.
+
+    Admins never trust this directly — they pick or create the final
+    role at approval time.
+    """
 
     email: EmailStr
     use_case: str = Field(min_length=10, max_length=400)
-    # The applicant's self-declared role. A slug from ``GET /roles``, or
-    # ``other:<freetext>`` when they picked "Other". The admin decides the
-    # final role at approval time; this is never trusted directly.
-    requested_role: str | None = Field(None, max_length=255)
+    requested_role: str = Field(min_length=1, max_length=255)
+
+    @field_validator("requested_role")
+    @classmethod
+    def _other_must_have_freetext(cls, v: str) -> str:
+        stripped = v.strip()
+        if stripped.lower().startswith("other:"):
+            freetext = stripped.split(":", 1)[1].strip()
+            if not freetext:
+                raise ValueError("Please describe your role when you pick 'Other'")
+        elif stripped.lower() == "other":
+            raise ValueError("Please describe your role when you pick 'Other'")
+        return stripped
 
 
 class SignupSubmitResponse(BaseModel):
@@ -70,10 +88,11 @@ class NewRoleInput(BaseModel):
 class SignupApproveRequest(BaseModel):
     """Admin approval payload.
 
-    Admin either:
-    - Assigns an existing role via ``role_id``, OR
-    - Creates a new role on the spot via ``new_role``, OR
-    - Leaves both null to approve without a role.
+    A role is mandatory — the admin must either:
+    - Assign an existing role via ``role_id``, OR
+    - Create a new role on the spot via ``new_role``.
+
+    Passing neither (or both) is a 400.
     """
 
     role_id: uuid.UUID | None = None
