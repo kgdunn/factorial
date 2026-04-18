@@ -350,9 +350,18 @@ curl -s http://localhost:8000/docs | head -20
 
 ### 8.2 — Databases
 
+> **Note:** PostgreSQL and Neo4j run **inside Docker containers**, not on the VPS host. There is no `psql` or `cypher-shell` binary on the VPS itself — running `psql` directly at the shell will fail with `command not found`. Always invoke them via `docker compose exec <service> ...` as shown below. This also means you don't need to install the `postgresql-client` or `cypher-shell` packages on the host.
+
 ```bash
 docker compose exec postgres psql -U doe_user -d doe_db -c "SELECT version();"
 docker compose exec neo4j cypher-shell -u neo4j -p '<YOUR_NEO4J_PASSWORD>' "RETURN 1"
+```
+
+To open an interactive `psql` session, drop the `-c "..."`:
+
+```bash
+docker compose exec postgres psql -U doe_user -d doe_db
+# at the postgres=# prompt, \q to exit
 ```
 
 ---
@@ -489,19 +498,72 @@ docker compose restart app
 
 ---
 
-## Phase 11: Auto-Restart & Monitoring
+## Phase 11: Bootstrap the First Admin User
 
-### 11.1 — Enable Docker on boot
+The app is **invite-only**: `POST /auth/register` is disabled in code, and new users can only register via an invite token issued by an existing admin. This creates a chicken-and-egg problem for the very first deploy — there is no admin yet, so no one can approve the first signup.
+
+The one-time workaround is to submit a normal signup request and then approve the DB row manually. You only need to do this once per deployment; after that, use the admin UI at `/admin/signups`.
+
+### 11.1 — Confirm your admin email is set
+
+In `.env`, `ADMIN_EMAILS` must contain the email you are about to use. Emails are matched case-insensitively. If you just edited it, restart the backend:
+
+```bash
+docker compose restart app
+```
+
+### 11.2 — Submit a signup request
+
+In your browser, go to `https://yourdomain.com` (or the IP), click through to the signup form, and submit a request using the exact email you listed in `ADMIN_EMAILS`. The use-case text can be anything.
+
+### 11.3 — Approve the row manually
+
+PostgreSQL runs inside Docker, so open `psql` via the container (see the note in Phase 8.2 — there is no `psql` on the host):
+
+```bash
+docker compose exec postgres psql -U doe_user -d doe_db
+```
+
+At the `doe_db=#` prompt, replace the email and run:
+
+```sql
+UPDATE signup_requests
+SET status = 'approved',
+    invite_token = 'bootstrap-' || md5(random()::text),
+    invite_expires_at = NOW() + INTERVAL '72 hours'
+WHERE email = 'you@example.com'
+RETURNING invite_token;
+```
+
+Copy the returned `invite_token` value, then `\q` to exit.
+
+### 11.4 — Complete registration
+
+In your browser, go to:
+
+```
+https://yourdomain.com/register/complete?token=<PASTE_TOKEN_HERE>
+```
+
+Set a password, log in. Because your email is in `ADMIN_EMAILS`, `/admin/signups` will now load for you, and from this point on you can approve all further signups through the UI.
+
+> Not ideal. A future release should provide either a `bootstrap_admin` management script or auto-approve the first signup if the `users` table is empty and the email matches `ADMIN_EMAILS`.
+
+---
+
+## Phase 12: Auto-Restart & Monitoring
+
+### 12.1 — Enable Docker on boot
 
 ```bash
 sudo systemctl enable docker
 ```
 
-### 11.2 — Container restart policies
+### 12.2 — Container restart policies
 
 The `docker-compose.yml` already includes `restart: unless-stopped` on all services. Containers will auto-restart after server reboots.
 
-### 11.3 — Docker log rotation
+### 12.3 — Docker log rotation
 
 ```bash
 sudo tee /etc/docker/daemon.json << 'EOF'
@@ -519,7 +581,7 @@ cd /home/deploy/agentic-doe
 docker compose up -d
 ```
 
-### 11.4 — Automatic security updates
+### 12.4 — Automatic security updates
 
 ```bash
 sudo apt install -y unattended-upgrades
@@ -528,7 +590,7 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 
 ---
 
-## Phase 12: Redeployment
+## Phase 13: Redeployment
 
 When updating the running server with new code:
 
@@ -546,7 +608,7 @@ docker compose logs -f app --tail=50
 
 ---
 
-## Phase 13: Backups
+## Phase 14: Backups
 
 ### PostgreSQL
 
