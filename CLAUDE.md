@@ -144,6 +144,9 @@ The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detect
 | `make format` | Auto-fix backend lint issues and format code |
 | `make test` | Run backend pytest |
 | `make migrate` | Run Alembic migrations (upgrade to head) |
+| `make logs` | Tail backend + frontend Docker logs (Ctrl+C to exit) |
+| `make logs-app` | Tail backend (FastAPI) Docker logs only |
+| `make logs-frontend` | Tail frontend (nginx) Docker logs only |
 | `make frontend-install` | Install frontend npm dependencies |
 | `make frontend-dev` | Start SvelteKit dev server (port 5173) |
 | `make frontend-build` | Build frontend for production |

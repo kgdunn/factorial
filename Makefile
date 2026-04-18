@@ -1,4 +1,5 @@
 .PHONY: help install debug deploy deploy-preflight deploy-up deploy-migrate \
+       logs logs-app logs-frontend \
        clean lint format test migrate \
        frontend-install frontend-dev frontend-build \
        docs-serve docs-build
@@ -30,6 +31,9 @@ help:
 	@echo "  deploy-preflight   Validate .env, install, lint, test"
 	@echo "  deploy-up          Build and start Docker services"
 	@echo "  deploy-migrate     Run migrations in Docker"
+	@echo "  logs               Tail backend + frontend logs (Ctrl+C to exit)"
+	@echo "  logs-app           Tail backend (FastAPI) logs only"
+	@echo "  logs-frontend      Tail frontend (nginx) logs only"
 	@echo "  clean              Tear down Docker services and remove caches"
 
 # ── Backend ──────────────────────────────────────────────
@@ -107,6 +111,15 @@ deploy-migrate:
 	@echo "==> Running database migrations..."
 	docker compose exec app uv run alembic upgrade head
 	@echo "==> Migrations complete."
+
+logs:
+	docker compose logs -f --tail=100 app frontend
+
+logs-app:
+	docker compose logs -f --tail=100 app
+
+logs-frontend:
+	docker compose logs -f --tail=100 frontend
 
 clean:
 	docker compose down -v --remove-orphans 2>/dev/null || true
