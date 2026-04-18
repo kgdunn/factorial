@@ -16,7 +16,6 @@
     isStreaming = false,
   }: Props = $props();
 
-  // Configure marked for synchronous parsing
   marked.setOptions({ async: false, breaks: true });
 
   function renderMarkdown(text: string): string {
@@ -28,39 +27,55 @@
   let showCursor = $derived(isLastAssistant && isStreaming);
 </script>
 
-<div class="flex {isUser ? 'justify-end' : 'justify-start'} mb-4">
-  <div class="max-w-[80%] {isUser
-    ? 'bg-primary text-white rounded-2xl rounded-br-md'
-    : 'bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md'
-  } px-4 py-3">
+<div class="mb-5 flex gap-3.5 {isUser ? 'flex-row-reverse' : ''}">
+  <div
+    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-xs
+           {isUser
+             ? 'bg-ink text-paper'
+             : 'bg-clay-tint text-clay-ink border border-[#EBD9C7]'}"
+  >
+    {#if isUser}
+      you
+    {:else}
+      ⌁
+    {/if}
+  </div>
 
+  <div
+    class="max-w-[680px] rounded-xl border px-4 py-3.5 font-sans text-[14px] leading-[1.6]
+           {isUser
+             ? 'bg-clay-tint border-[#EBD9C7] text-ink'
+             : 'bg-paper-2 border-rule-soft text-ink'}"
+  >
     {#each message.content as block}
       {#if block.type === 'text'}
         {#if isUser}
-          <p class="whitespace-pre-wrap text-sm">{block.text}</p>
+          <p class="whitespace-pre-wrap">{block.text}</p>
         {:else}
-          <!-- Assistant text rendered as markdown -->
-          <div class="prose prose-sm max-w-none
-            prose-headings:text-gray-800 prose-headings:font-semibold
-            prose-p:text-gray-700 prose-p:my-1
-            prose-code:text-primary prose-code:bg-blue-50 prose-code:px-1 prose-code:rounded
-            prose-pre:bg-gray-800 prose-pre:text-gray-100 prose-pre:rounded-lg
-            prose-a:text-primary prose-a:underline
-            prose-table:text-sm
-            prose-th:border prose-th:border-gray-300 prose-th:px-2 prose-th:py-1
-            prose-td:border prose-td:border-gray-200 prose-td:px-2 prose-td:py-1">
+          <div
+            class="prose prose-sm max-w-none font-sans
+                   prose-headings:font-serif prose-headings:italic prose-headings:text-ink
+                   prose-p:text-ink prose-p:my-1
+                   prose-strong:text-clay-ink prose-em:text-clay-ink prose-em:font-serif
+                   prose-code:text-clay-ink prose-code:bg-paper-3 prose-code:px-1 prose-code:rounded
+                   prose-pre:bg-ink prose-pre:text-paper prose-pre:rounded-lg
+                   prose-a:text-clay-ink prose-a:underline
+                   prose-table:text-sm
+                   prose-th:border prose-th:border-rule prose-th:px-2 prose-th:py-1
+                   prose-td:border prose-td:border-rule-soft prose-td:px-2 prose-td:py-1"
+          >
             {@html renderMarkdown(block.text)}
           </div>
         {/if}
-
       {:else if block.type === 'tool_use'}
         {#if block.isLoading}
-          <div class="flex items-center gap-2 my-2 text-sm text-gray-500">
-            <div class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-400 border-t-transparent"></div>
-            <span>Calling {block.name}...</span>
+          <div class="my-2 flex items-center gap-2 font-mono text-xs text-ink-faint">
+            <div
+              class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-clay border-t-transparent"
+            ></div>
+            <span>Calling {block.name}…</span>
           </div>
         {/if}
-
       {:else if block.type === 'tool_result'}
         <ToolResultCard
           toolName={block.toolName}
@@ -78,7 +93,7 @@
     {/each}
 
     {#if showCursor}
-      <span class="inline-block w-2 h-4 bg-gray-400 animate-pulse ml-0.5 align-text-bottom"></span>
+      <span class="ml-0.5 inline-block h-4 w-2 animate-pulse bg-ink-faint align-text-bottom"></span>
     {/if}
   </div>
 </div>

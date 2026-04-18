@@ -1,12 +1,38 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-light: #3b82f6;
-  --color-primary-dark: #1d4ed8;
-  --color-positive: #059669;
-  --color-negative: #dc2626;
-  --color-neutral: #6b7280;
-  --color-surface: #f9fafb;
-  --color-surface-dark: #f3f4f6;
+  --color-paper: #F7F4EC;
+  --color-paper-2: #EFEADB;
+  --color-paper-3: #E6E0CE;
+  --color-stage: #E9E3D1;
+  --color-ink: #26241E;
+  --color-ink-soft: #5A5649;
+  --color-ink-faint: #8C8576;
+  --color-rule: #D9D2BE;
+  --color-rule-soft: #E4DEC9;
+  --color-clay: #B57A57;
+  --color-clay-ink: #7D4E31;
+  --color-clay-tint: #F5ECE2;
+  --color-moss: #5F7361;
+  --color-sky: #8BA4B8;
+
+  --color-primary: var(--color-clay);
+  --color-primary-light: var(--color-clay-tint);
+  --color-primary-dark: var(--color-clay-ink);
+  --color-positive: var(--color-moss);
+  --color-negative: #B23A2B;
+  --color-neutral: var(--color-ink-faint);
+  --color-surface: var(--color-paper-2);
+  --color-surface-dark: var(--color-paper-3);
+
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Inter Tight', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
 }
