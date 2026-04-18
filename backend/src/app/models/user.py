@@ -14,11 +14,9 @@ from app.db.base import Base
 class User(Base):
     """A registered user account.
 
-    ``is_admin`` is the sole admin marker — the legacy ``ADMIN_EMAILS``
-    env var is no longer consulted. ``role_id`` is the user's role /
-    profile (see ``roles`` table); the legacy ``background`` string
-    column is retained for one release for backfill purposes and will
-    be dropped in a later migration.
+    ``is_admin`` is the sole admin marker. ``role_id`` points at the
+    user's role / profile (see ``roles`` table) and is the canonical
+    source for system-prompt personalisation.
     """
 
     __tablename__ = "users"
@@ -31,7 +29,6 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    background: Mapped[str | None] = mapped_column(String(50), nullable=True)
     role_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("roles.id", ondelete="SET NULL"),

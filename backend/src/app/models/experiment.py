@@ -8,7 +8,6 @@ incremental results entry.
 
 from __future__ import annotations
 
-import enum
 import uuid
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, func
@@ -16,15 +15,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
-
-class ExperimentStatus(enum.StrEnum):
-    """Lifecycle status of an experiment."""
-
-    draft = "draft"
-    active = "active"
-    completed = "completed"
-    archived = "archived"
 
 
 class Experiment(Base):
@@ -37,10 +27,10 @@ class Experiment(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
+    user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=True,
+        nullable=False,
         index=True,
     )
     name: Mapped[str] = mapped_column(
