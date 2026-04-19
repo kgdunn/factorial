@@ -303,6 +303,29 @@ def upgrade() -> None:
     op.create_index("ix_experiment_shares_token", "experiment_shares", ["token"], unique=True)
     op.create_index("ix_experiment_shares_exp_revoked", "experiment_shares", ["experiment_id", "revoked_at"])
 
+    # -- tool_usage -----------------------------------------------------------
+    # Per-identity, per-day CPU-time accounting for the tool bridge and the
+    # hosted MCP endpoint. ``user_id`` is NOT a foreign key so the synthetic
+    # SERVICE_USER_ID (shared X-API-Key identity) can write here.
+    op.create_table(
+        "tool_usage",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            server_default=sa.text("gen_random_uuid()"),
+            primary_key=True,
+        ),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("day", sa.Date(), nullable=False),
+        sa.Column("cpu_seconds_used", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("call_count", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.UniqueConstraint("user_id", "day", name="uq_tool_usage_user_day"),
+    )
+    op.create_index("ix_tool_usage_user_id", "tool_usage", ["user_id"])
+    op.create_index("ix_tool_usage_day", "tool_usage", ["day"])
+
     # -- seed built-in roles --------------------------------------------------
     roles_table = sa.table(
         "roles",
@@ -317,6 +340,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_tool_usage_day", table_name="tool_usage")
+    op.drop_index("ix_tool_usage_user_id", table_name="tool_usage")
+    op.drop_table("tool_usage")
+
     op.drop_index("ix_experiment_shares_exp_revoked", table_name="experiment_shares")
     op.drop_index("ix_experiment_shares_token", table_name="experiment_shares")
     op.drop_index("ix_experiment_shares_experiment_id", table_name="experiment_shares")

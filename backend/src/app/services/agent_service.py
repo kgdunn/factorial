@@ -25,14 +25,16 @@ from decimal import Decimal
 from typing import Any
 
 import anthropic
+import psutil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import ServerSentEvent
 
 from app.config import settings
 from app.db.session import async_session_factory
-from app.models.conversation import Conversation, Message, ToolCall
+from app.models.conversation import ChatEvent, Conversation, Message, ToolCall
 from app.services import pricing
+from app.services.anthropic_status import status_tracker
 from app.services.exceptions import ToolExecutionError
 from app.services.experiment_service import (
     create_experiment,
@@ -108,9 +110,45 @@ _SENTINEL: None = None
 _QueueItem = tuple[str, dict[str, Any]] | None
 
 
-def _sse(event: str, data: dict[str, Any]) -> ServerSentEvent:
-    """Create a ``ServerSentEvent`` with a JSON-serialised data payload."""
-    return ServerSentEvent(data=json.dumps(data), event=event)
+def _sse(event: str, data: dict[str, Any], event_id: str | None = None) -> ServerSentEvent:
+    """Create a ``ServerSentEvent`` with a JSON-serialised data payload.
+
+    When ``event_id`` is provided it becomes the SSE ``id:`` field, which
+    the browser echoes back as ``Last-Event-ID`` on automatic reconnect.
+    """
+    return ServerSentEvent(data=json.dumps(data), event=event, id=event_id)
+
+
+async def _persist_chat_event(
+    conversation_id: uuid.UUID,
+    turn_id: uuid.UUID,
+    sequence: int,
+    event_type: str,
+    data: dict[str, Any],
+) -> None:
+    """Append one SSE event row to ``chat_events`` in its own session.
+
+    Uses an independent session so event persistence is committed
+    immediately and is visible to any other container that serves a
+    resume request (important for blue-green cutovers).
+
+    Persistence failures are swallowed — the live SSE stream must not
+    die just because the resume log is unavailable.
+    """
+    try:
+        async with async_session_factory() as db:
+            db.add(
+                ChatEvent(
+                    conversation_id=conversation_id,
+                    turn_id=turn_id,
+                    sequence=sequence,
+                    event_type=event_type,
+                    data=data,
+                )
+            )
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to persist chat_event seq=%s turn=%s", sequence, turn_id)
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +162,7 @@ def _run_agent_loop(
     tool_specs: list[dict[str, Any]],
     client: anthropic.Anthropic,
     model: str,
+    turn_id: uuid.UUID,
 ) -> dict[str, Any]:
     """Synchronous agent loop executed in a background thread.
 
@@ -157,6 +196,7 @@ def _run_agent_loop(
                 response = stream.get_final_message()
 
             turn_latency_ms = int((time.perf_counter() - turn_start) * 1000)
+            status_tracker.record_success(turn_latency_ms)
 
             # --- Collect response metadata ---
             usage = response.usage
@@ -202,6 +242,7 @@ def _run_agent_loop(
             for call_order, tool_block in enumerate(tool_use_blocks, start=1):
                 event_queue.put(("tool_start", {"tool": tool_block.name, "input": tool_block.input}))
 
+                input_bytes = len(json.dumps(tool_block.input, default=str).encode("utf-8"))
                 record: dict[str, Any] = {
                     "tool_use_id": tool_block.id,
                     "tool_name": tool_block.name,
@@ -209,12 +250,17 @@ def _run_agent_loop(
                     "agent_turn": agent_turn,
                     "call_order": call_order,
                     "started_at": datetime.now(UTC),
+                    "turn_id": turn_id,
+                    "model_key": model,
+                    "input_bytes": input_bytes,
+                    "output_truncated": False,
                 }
 
                 t0 = time.perf_counter()
                 try:
                     result = execute_tool_call(tool_block.name, tool_block.input)
                     duration_ms = int((time.perf_counter() - t0) * 1000)
+                    output_bytes = len(json.dumps(result, default=str).encode("utf-8"))
 
                     record.update(
                         {
@@ -222,6 +268,7 @@ def _run_agent_loop(
                             "status": "success",
                             "completed_at": datetime.now(UTC),
                             "duration_ms": duration_ms,
+                            "output_bytes": output_bytes,
                         }
                     )
 
@@ -263,6 +310,19 @@ def _run_agent_loop(
                         }
                     )
 
+                # Process-wide system snapshot at tool finish. NOT per-tool:
+                # in a multi-worker process the numbers describe the whole
+                # backend, not this tool's own cost. Best read as "what was
+                # the system doing when this tool ended".
+                try:
+                    proc = psutil.Process()
+                    record["rss_bytes"] = proc.memory_info().rss
+                    record["cpu_percent"] = proc.cpu_percent(interval=None)
+                except psutil.Error:
+                    # Telemetry must never break the agent loop.
+                    record["rss_bytes"] = None
+                    record["cpu_percent"] = None
+
                 tool_call_records.append(record)
 
             # Append tool results as a user message and loop.
@@ -278,6 +338,18 @@ def _run_agent_loop(
         event_queue.put(("error", {"message": "Invalid Anthropic API key."}))
     except anthropic.RateLimitError:
         event_queue.put(("error", {"message": "Anthropic rate limit exceeded. Please retry later."}))
+    except (anthropic.APIConnectionError, anthropic.APITimeoutError, anthropic.InternalServerError) as exc:
+        status_tracker.record_error(type(exc).__name__)
+        event_queue.put(
+            (
+                "error",
+                {
+                    "kind": "anthropic_unavailable",
+                    "message": "The AI service is currently unavailable. Please try again in a moment.",
+                    "detail": str(exc),
+                },
+            )
+        )
     except Exception:
         logger.exception("Agent loop failed")
         event_queue.put(("error", {"message": "Internal error in agent loop."}))
@@ -499,6 +571,14 @@ async def _persist_tool_calls(
             duration_ms=rec.get("duration_ms"),
             agent_turn=rec.get("agent_turn", 1),
             call_order=rec.get("call_order", 1),
+            turn_id=rec.get("turn_id"),
+            model_key=rec.get("model_key"),
+            rss_bytes=rec.get("rss_bytes"),
+            cpu_percent=rec.get("cpu_percent"),
+            input_bytes=rec.get("input_bytes"),
+            output_bytes=rec.get("output_bytes"),
+            output_truncated=rec.get("output_truncated", False),
+            tool_version=rec.get("tool_version"),
         )
         db.add(tc)
 
@@ -549,8 +629,20 @@ async def run_chat(
 
     The DB session is managed inside the generator (not via ``Depends``)
     so its lifetime matches the SSE stream.
+
+    Every SSE event yielded by this generator carries an ``id:`` of the
+    form ``{turn_id}:{sequence}`` and is persisted to ``chat_events``
+    before being yielded, so a disconnected client can replay missed
+    events via the resume endpoint using the standard SSE
+    ``Last-Event-ID`` header.
     """
     system_prompt = _build_system_prompt(user_background)
+
+    # One ``turn_id`` per ``run_chat`` invocation. Shared across all
+    # SSE events emitted during this turn so the resume endpoint can
+    # scope its replay cleanly.
+    turn_id = uuid.uuid4()
+    event_seq = 0
 
     async with async_session_factory() as db:
         try:
@@ -558,6 +650,9 @@ async def run_chat(
             if conversation_id:
                 conversation = await db.get(Conversation, conversation_id)
                 if not conversation:
+                    # Pre-conversation error — nothing to persist into
+                    # ``chat_events``; client can't resume a turn that
+                    # never existed.
                     yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
                     return
                 if conversation.user_id != user_id:
@@ -584,7 +679,11 @@ async def run_chat(
                 api_messages = []
                 next_seq = 1
 
-            # 2. Persist the user message.
+            # 2. Persist the user message. Committed eagerly so that
+            #    (a) the user's turn is durable even if the agent loop
+            #    later crashes, and (b) ``chat_events`` rows written
+            #    from their own sessions below can satisfy the FK to
+            #    ``conversations.id``.
             user_msg = Message(
                 conversation_id=conversation.id,
                 role="user",
@@ -593,14 +692,27 @@ async def run_chat(
             )
             db.add(user_msg)
             conversation.message_count = (conversation.message_count or 0) + 1
-            await db.flush()
+            await db.commit()
             next_seq += 1
 
             # 3. Append user message to API history.
             api_messages.append({"role": "user", "content": message})
 
-            # 4. Emit conversation_id so the frontend can track it.
-            yield _sse("conversation_id", {"conversation_id": str(conversation.id)})
+            # Helper that assigns the next sequence, persists the event
+            # to ``chat_events`` in a side session, and returns the
+            # ``ServerSentEvent`` ready to yield.
+            async def emit(event_type: str, data: dict[str, Any]) -> ServerSentEvent:
+                nonlocal event_seq
+                event_seq += 1
+                await _persist_chat_event(conversation.id, turn_id, event_seq, event_type, data)
+                return _sse(event_type, data, event_id=f"{turn_id}:{event_seq}")
+
+            # 4. Emit conversation_id + the turn_id so the frontend can
+            #    construct a resume URL without guessing.
+            yield await emit(
+                "conversation_id",
+                {"conversation_id": str(conversation.id), "turn_id": str(turn_id)},
+            )
 
             # 5. Launch agent loop in a thread.
             event_queue: queue.Queue[_QueueItem] = queue.Queue()
@@ -609,7 +721,7 @@ async def run_chat(
             try:
                 client = get_anthropic_client()
             except RuntimeError as exc:
-                yield _sse("error", {"message": str(exc)})
+                yield await emit("error", {"message": str(exc)})
                 return
 
             loop = asyncio.get_event_loop()
@@ -621,11 +733,15 @@ async def run_chat(
                 tool_specs,
                 client,
                 settings.anthropic_model,
+                turn_id,
             )
 
-            # 6. Stream SSE events from the queue.
+            # 6. Stream SSE events from the queue — persist each one
+            #    before yielding so the resume log is always at least as
+            #    advanced as what the client has received.
             async for sse_event in _stream_from_queue(event_queue):
-                yield sse_event
+                payload = json.loads(sse_event.data) if sse_event.data else {}
+                yield await emit(sse_event.event or "message", payload)
 
             # 7. Await the thread result.
             loop_result = await future
@@ -668,7 +784,7 @@ async def run_chat(
 
             # 10. Emit experiment_created events (after commit, so IDs are stable).
             for experiment in created_experiments:
-                yield _sse(
+                yield await emit(
                     "experiment_created",
                     {
                         "experiment_id": str(experiment.id),
@@ -680,4 +796,9 @@ async def run_chat(
         except Exception:
             logger.exception("run_chat failed")
             await db.rollback()
-            yield _sse("error", {"message": "Internal server error."})
+            # Attempt a persisted error event so a reconnecting client
+            # sees the turn ended in failure rather than looping forever.
+            try:
+                yield await emit("error", {"message": "Internal server error."})
+            except Exception:
+                yield _sse("error", {"message": "Internal server error."})

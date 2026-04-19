@@ -22,7 +22,8 @@ export type SSEEventType =
   | 'tool_result'
   | 'done'
   | 'error'
-  | 'experiment_created';
+  | 'experiment_created'
+  | 'interrupted';
 
 // ---------------------------------------------------------------------------
 // Content blocks (discriminated union)
@@ -67,13 +68,25 @@ export interface ChatMessage {
 // ---------------------------------------------------------------------------
 
 export interface SSECallbacks {
-  onConversationId(id: string): void;
+  onConversationId(id: string, turnId?: string): void;
   onToken(text: string): void;
   onToolStart(tool: string, input: Record<string, unknown>): void;
   onToolResult(tool: string, output: Record<string, unknown>): void;
   onDone(): void;
   onError(message: string): void;
   onExperimentCreated?(data: ExperimentCreatedEvent): void;
+  /**
+   * Emitted by the resume endpoint when the underlying turn did not
+   * reach a terminal (done/error) event — e.g. the server container
+   * restarted mid-stream. The client should surface a "stream was
+   * interrupted — retry?" state instead of waiting forever.
+   */
+  onInterrupted?(message: string): void;
+  /**
+   * Called once per SSE event that carries an ``id:`` field so the
+   * client can track the last-seen event id for reconnect.
+   */
+  onEventId?(eventId: string): void;
 }
 
 // ---------------------------------------------------------------------------

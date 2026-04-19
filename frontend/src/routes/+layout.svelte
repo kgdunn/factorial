@@ -1,12 +1,21 @@
 <script lang="ts">
   import '../app.css';
   import type { Snippet } from 'svelte';
+  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { authState } from '$lib/state/auth.svelte';
+  import { anthropicStatus } from '$lib/state/anthropicStatus.svelte';
   import Wordmark from '$lib/components/brand/Wordmark.svelte';
+  import SystemBanner from '$lib/components/brand/SystemBanner.svelte';
+  import FeedbackLauncher from '$lib/components/feedback/FeedbackLauncher.svelte';
 
   let { children }: { children: Snippet } = $props();
+
+  onMount(() => {
+    anthropicStatus.start();
+    return () => anthropicStatus.stop();
+  });
 
   // Pages that don't require authentication
   const publicPaths = ['/', '/login', '/register', '/register/complete', '/prototype'];
@@ -33,6 +42,7 @@
 </script>
 
 <div class="flex h-screen flex-col bg-paper">
+  <SystemBanner />
   <!-- Navigation bar -->
   <nav class="flex items-center justify-between border-b border-rule bg-paper-2 px-6 py-3">
     <a href="/" class="flex items-center" aria-label="factori.al home">
@@ -90,4 +100,6 @@
   <main class="flex-1 overflow-hidden">
     {@render children()}
   </main>
+
+  <FeedbackLauncher />
 </div>

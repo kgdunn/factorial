@@ -55,7 +55,13 @@ async def submit_signup(
 ) -> SignupSubmitResponse:
     """Submit a signup request for admin review."""
     try:
-        await create_signup(db, email=body.email, use_case=body.use_case, requested_role=body.requested_role)
+        await create_signup(
+            db,
+            email=body.email,
+            use_case=body.use_case,
+            requested_role=body.requested_role,
+            accepted_disclaimers=body.accepted_disclaimers,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
 

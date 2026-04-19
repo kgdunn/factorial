@@ -6,6 +6,7 @@
   let useCase = $state('');
   let roleId = $state<string>(''); // '' | '__other' | <role.id>
   let otherLabel = $state('');
+  let acceptedDisclaimers = $state(false);
   let error = $state<string | null>(null);
   let loading = $state(false);
   let submitted = $state(false);
@@ -42,7 +43,8 @@
     !!email &&
       useCase.length >= 10 &&
       !!roleId &&
-      (roleId !== '__other' || otherLabel.trim().length > 0),
+      (roleId !== '__other' || otherLabel.trim().length > 0) &&
+      acceptedDisclaimers,
   );
 
   async function handleSubmit(e: Event) {
@@ -58,7 +60,7 @@
     }
     loading = true;
     try {
-      await postSignupRequest(email, useCase, rr);
+      await postSignupRequest(email, useCase, rr, acceptedDisclaimers);
       submitted = true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Something went wrong';
@@ -177,6 +179,25 @@
             <span class={charsLeft < 50 ? 'text-orange-500 font-medium' : ''}>{charsLeft}</span>
             characters remaining
           </p>
+        </div>
+
+        <div class="rounded-md border border-gray-200 bg-gray-50 p-3">
+          <label class="flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              bind:checked={acceptedDisclaimers}
+              required
+              class="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <span>
+              I understand this is research software provided without warranty, that my
+              use case description may be reviewed by project administrators, and that
+              my account may be revoked at any time.
+              <span class="block mt-1 text-xs text-gray-500">
+                TODO: replace with final disclaimer text before launch.
+              </span>
+            </span>
+          </label>
         </div>
 
         <button

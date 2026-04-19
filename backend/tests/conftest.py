@@ -5,6 +5,9 @@ from httpx import ASGITransport, AsyncClient
 
 # Set testing environment before importing the app
 os.environ["APP_ENV"] = "testing"
+# Run tool calls in-process during tests (no subprocess, no memory cap)
+# so the suite stays fast. Production defaults to safe mode.
+os.environ.setdefault("TOOL_SAFE_MODE", "false")
 
 from app.api.deps import TESTING_USER_ID, AuthUser, require_api_key, require_auth  # noqa: E402
 from app.main import app  # noqa: E402

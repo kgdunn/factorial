@@ -12,11 +12,20 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-async def send_email(to: str, subject: str, html_body: str) -> None:
+async def send_email(
+    to: str,
+    subject: str,
+    html_body: str,
+    *,
+    attachments: list[tuple[str, str, bytes]] | None = None,
+) -> None:
     """Send an HTML email via SMTP.
 
     If ``SMTP_HOST`` is not configured the email is logged and skipped,
     allowing the application to run in development without SMTP.
+
+    ``attachments`` is an optional list of ``(filename, mime_type, payload)``
+    tuples; ``mime_type`` must be ``"maintype/subtype"`` (e.g. ``image/png``).
     """
     if not settings.smtp_host:
         logger.warning("SMTP not configured — email to %s (%s) logged only", to, subject)
@@ -27,6 +36,15 @@ async def send_email(to: str, subject: str, html_body: str) -> None:
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(html_body, subtype="html")
+    if attachments:
+        for filename, mime_type, data in attachments:
+            maintype, _, subtype = mime_type.partition("/")
+            msg.add_attachment(
+                data,
+                maintype=maintype or "application",
+                subtype=subtype or "octet-stream",
+                filename=filename,
+            )
 
     try:
         await aiosmtplib.send(

@@ -28,6 +28,8 @@ export interface SignupDetail {
   admin_note: string | null;
   requested_role: string | null;
   role: SignupRoleSummary | null;
+  accepted_disclaimers: boolean;
+  disclaimers_accepted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -52,11 +54,17 @@ export async function postSignupRequest(
   email: string,
   useCase: string,
   requestedRole: string | null = null,
+  acceptedDisclaimers: boolean = false,
 ): Promise<SignupSubmitResponse> {
   const resp = await fetch('/api/v1/signup/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, use_case: useCase, requested_role: requestedRole }),
+    body: JSON.stringify({
+      email,
+      use_case: useCase,
+      requested_role: requestedRole,
+      accepted_disclaimers: acceptedDisclaimers,
+    }),
   });
 
   if (resp.status === 409) {

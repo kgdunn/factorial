@@ -1,21 +1,38 @@
 """SQLAlchemy models for conversation persistence.
 
-Three models track the full lifecycle of agent conversations:
+Four models track the full lifecycle of agent conversations:
 
 - **Conversation**: a chat session with metadata, token totals, and status.
 - **Message**: individual messages (user text, assistant text, tool_use blocks,
   tool_result entries) ordered by ``sequence`` within a conversation.
 - **ToolCall**: per-invocation audit trail capturing tool name, timing,
   input/output, and ordering within the agent loop.
+- **ChatEvent**: append-only log of SSE events emitted during each turn,
+  used to resume dropped SSE streams via ``Last-Event-ID``.
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -184,6 +201,29 @@ class ToolCall(Base):
     agent_turn: Mapped[int] = mapped_column(Integer, default=1)
     call_order: Mapped[int] = mapped_column(Integer, default=1)
 
+    # Groups every tool call that belongs to the same user turn.
+    # Matches ``ChatEvent.turn_id``. Nullable for rows written before 0004.
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+
+    # Which orchestrating model produced this tool call.
+    model_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # Process-wide system snapshot at the moment the tool finished.
+    # These are NOT per-tool measurements: they describe the condition
+    # the backend process was in, not the tool's own cost.
+    rss_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cpu_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Payload sizes (JSON-serialised length in bytes). Cheap cost proxy.
+    input_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Reserved for a future output size-cap policy; defaults to false.
+    output_truncated: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+
+    # Optional version string reported by the tool implementation.
+    tool_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
     # Timestamps
     created_at: Mapped[str] = mapped_column(
         DateTime(timezone=True),
@@ -192,3 +232,43 @@ class ToolCall(Base):
 
     # Relationships
     conversation: Mapped[Conversation] = relationship(back_populates="tool_calls")
+
+
+class ChatEvent(Base):
+    """Append-only log of SSE events emitted during an agent turn.
+
+    Every event the chat stream yields (``conversation_id``, ``token``,
+    ``tool_start``, ``tool_result``, ``experiment_created``, ``done``,
+    ``error``) is persisted here so that a client which drops its SSE
+    connection can reconnect with ``Last-Event-ID`` and replay anything
+    it missed. Rows are scoped by ``turn_id`` — one UUID per
+    ``run_chat`` invocation — and ordered by the monotonic per-turn
+    ``sequence`` column.
+    """
+
+    __tablename__ = "chat_events"
+    __table_args__ = (UniqueConstraint("turn_id", "sequence", name="uq_chat_events_turn_sequence"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    turn_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=False,
+        default=dict,
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )

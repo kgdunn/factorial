@@ -22,6 +22,7 @@ async def create_signup(
     email: str,
     use_case: str,
     requested_role: str | None = None,
+    accepted_disclaimers: bool = False,
 ) -> SignupRequest:
     """Create a new pending signup request.
 
@@ -44,7 +45,13 @@ async def create_signup(
     if result.scalar_one_or_none():
         raise ValueError("This email is already registered")  # noqa: TRY003
 
-    signup = SignupRequest(email=email, use_case=use_case, requested_role=requested_role)
+    signup = SignupRequest(
+        email=email,
+        use_case=use_case,
+        requested_role=requested_role,
+        accepted_disclaimers=accepted_disclaimers,
+        disclaimers_accepted_at=datetime.now(UTC) if accepted_disclaimers else None,
+    )
     db.add(signup)
     await db.flush()
     return signup

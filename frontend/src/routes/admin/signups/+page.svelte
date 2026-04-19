@@ -209,6 +209,15 @@
                 {#if signup.admin_note}
                   <p class="mt-2 text-xs text-gray-400">Note: {signup.admin_note}</p>
                 {/if}
+                <p class="mt-2 text-xs {signup.accepted_disclaimers ? 'text-green-700' : 'text-red-600'}">
+                  {#if signup.accepted_disclaimers}
+                    ✓ Disclaimer accepted{signup.disclaimers_accepted_at
+                      ? ` on ${formatDate(signup.disclaimers_accepted_at)}`
+                      : ''}
+                  {:else}
+                    ✗ Disclaimer not accepted
+                  {/if}
+                </p>
                 <p class="mt-2 text-xs text-gray-400">{formatDate(signup.created_at)}</p>
               </div>
 
