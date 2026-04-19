@@ -11,6 +11,7 @@
  */
 
 import { authState } from '$lib/state/auth.svelte';
+import { anthropicStatus } from '$lib/state/anthropicStatus.svelte';
 import type { ExperimentCreatedEvent, SSECallbacks } from '$lib/types';
 
 // ---------------------------------------------------------------------------
@@ -110,6 +111,12 @@ function dispatchSSEEvent(
       callbacks.onDone();
       break;
     case 'error':
+      if (data.kind === 'anthropic_unavailable') {
+        // Optimistically flip the global banner to 'down' ahead of the
+        // next scheduled health poll, so the chatting user sees what
+        // just happened instead of waiting up to 20s.
+        anthropicStatus.markErrorFromSSE((data.detail as string | null) ?? null);
+      }
       callbacks.onError(data.message as string);
       break;
     case 'experiment_created':
