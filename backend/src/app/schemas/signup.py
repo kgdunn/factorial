@@ -23,6 +23,14 @@ class SignupSubmitRequest(BaseModel):
     email: EmailStr
     use_case: str = Field(min_length=10, max_length=400)
     requested_role: str = Field(min_length=1, max_length=255)
+    accepted_disclaimers: bool
+
+    @field_validator("accepted_disclaimers")
+    @classmethod
+    def _disclaimers_must_be_accepted(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("You must accept the disclaimers to submit a signup request")
+        return v
 
     @field_validator("requested_role")
     @classmethod
@@ -63,6 +71,8 @@ class SignupDetail(BaseModel):
     admin_note: str | None
     requested_role: str | None
     role: RoleSummary | None = None
+    accepted_disclaimers: bool
+    disclaimers_accepted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

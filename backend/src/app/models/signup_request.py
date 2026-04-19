@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +43,18 @@ class SignupRequest(Base):
 
     # Admin review
     admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Disclaimer acceptance captured on the public signup form.
+    accepted_disclaimers: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
+    )
+    disclaimers_accepted_at: Mapped[str | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     role = relationship("Role", lazy="joined", foreign_keys=[role_id])
 
