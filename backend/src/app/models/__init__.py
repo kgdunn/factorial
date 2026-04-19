@@ -7,3 +7,4 @@ from app.models.setup_token import SetupToken  # noqa: F401
 from app.models.signup_request import SignupRequest  # noqa: F401
 from app.models.tool_usage import ToolUsage  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.user_feedback import UserFeedback  # noqa: F401
