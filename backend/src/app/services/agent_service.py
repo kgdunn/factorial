@@ -34,6 +34,7 @@ from app.config import settings
 from app.db.session import async_session_factory
 from app.models.conversation import ChatEvent, Conversation, Message, ToolCall
 from app.services import pricing
+from app.services.anthropic_status import status_tracker
 from app.services.exceptions import ToolExecutionError
 from app.services.experiment_service import (
     create_experiment,
@@ -195,6 +196,7 @@ def _run_agent_loop(
                 response = stream.get_final_message()
 
             turn_latency_ms = int((time.perf_counter() - turn_start) * 1000)
+            status_tracker.record_success(turn_latency_ms)
 
             # --- Collect response metadata ---
             usage = response.usage
@@ -336,6 +338,18 @@ def _run_agent_loop(
         event_queue.put(("error", {"message": "Invalid Anthropic API key."}))
     except anthropic.RateLimitError:
         event_queue.put(("error", {"message": "Anthropic rate limit exceeded. Please retry later."}))
+    except (anthropic.APIConnectionError, anthropic.APITimeoutError, anthropic.InternalServerError) as exc:
+        status_tracker.record_error(type(exc).__name__)
+        event_queue.put(
+            (
+                "error",
+                {
+                    "kind": "anthropic_unavailable",
+                    "message": "The AI service is currently unavailable. Please try again in a moment.",
+                    "detail": str(exc),
+                },
+            )
+        )
     except Exception:
         logger.exception("Agent loop failed")
         event_queue.put(("error", {"message": "Internal error in agent loop."}))
