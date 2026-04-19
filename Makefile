@@ -1,4 +1,5 @@
 .PHONY: help install debug deploy deploy-preflight deploy-up deploy-migrate \
+       deploy-bg deploy-bg-force rollback-bg \
        logs logs-app logs-frontend \
        clean lint format test migrate \
        frontend-install frontend-dev frontend-build \
@@ -32,6 +33,9 @@ help:
 	@echo "  deploy-preflight   Validate .env, install, lint, test"
 	@echo "  deploy-up          Build and start Docker services"
 	@echo "  deploy-migrate     Run migrations in Docker"
+	@echo "  deploy-bg          Zero-downtime blue-green deploy (interactive)"
+	@echo "  deploy-bg-force    deploy-bg without the confirmation prompt"
+	@echo "  rollback-bg        Flip Caddy back to the previous colour"
 	@echo "  logs               Tail backend + frontend logs (Ctrl+C to exit)"
 	@echo "  logs-app           Tail backend (FastAPI) logs only"
 	@echo "  logs-frontend      Tail frontend (nginx) logs only"
@@ -117,6 +121,21 @@ deploy-migrate:
 	@echo "==> Running database migrations..."
 	docker compose exec app uv run alembic upgrade head
 	@echo "==> Migrations complete."
+
+# ── Blue-Green Deploy (zero-downtime) ───────────────────────
+# Runs the idle colour (blue/green) alongside the live one,
+# flips Caddy's upstream once the new colour is healthy, then
+# drains the old colour. See scripts/deploy-blue-green.sh and
+# docs/deployment/vps-guide.md for the full runbook.
+
+deploy-bg:
+	./scripts/deploy-blue-green.sh
+
+deploy-bg-force:
+	./scripts/deploy-blue-green.sh --force
+
+rollback-bg:
+	./scripts/deploy-blue-green.sh --rollback
 
 logs:
 	docker compose logs -f --tail=100 app frontend

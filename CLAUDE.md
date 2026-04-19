@@ -127,6 +127,42 @@ The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detect
 - All SQLAlchemy models inherit from `app.db.base.Base`
 - **Single initial migration**: the schema lives in one forward-only revision (`backend/alembic/versions/0001_initial_schema.py`). Any future schema change is a **new** Alembic revision that chains on top of it. Do not edit `0001_initial_schema.py` in place. Until the first production release, prefer to extend that initial revision directly rather than accumulating tiny migrations. No transition columns, dual-write shims, or "kept for one release" cruft — break the schema cleanly.
 
+### Incremental database changes (expand / contract)
+
+The production deploy strategy is **blue-green** (two backend containers alongside a shared Postgres; see `docs/deployment/vps-guide.md` Phase 13b). During every cutover, two code versions run against the same database at the same time — the old colour keeps serving live traffic and in-flight SSE streams while the new colour takes over. That constraint makes schema migrations a place where mistakes cause user-visible outages.
+
+The rule: **every migration merged to `main` must be backwards-compatible with the previous code version.** Follow the classic expand/contract split:
+
+- **Expand** (safe during a blue-green deploy):
+  - Add a new table.
+  - Add a nullable column.
+  - Add an index `CONCURRENTLY`.
+  - Widen a `VARCHAR` / loosen a check constraint.
+  - Backfill a default into new nullable rows.
+- **Contract** (NOT safe to ship in the same deploy as the matching expand; must go in a **subsequent** deploy after the expand has rolled out and the old code is gone):
+  - Drop a column.
+  - Tighten `NULL` → `NOT NULL`.
+  - Drop a table.
+  - Rename a column (in effect a drop + add).
+  - Remove an enum value.
+
+A destructive change paired with the code that depends on it will take down the still-running old colour mid-deploy.
+
+### Agent behaviour on schema-changing PRs
+
+Because this discipline is new and the user is not yet fully comfortable with the blue-green strategy, Claude sessions that touch the database schema MUST actively walk the user through the implications rather than just making the change:
+
+1. **Flag it up front.** The moment a task involves a new Alembic migration, an edit to an existing migration, or a change to a SQLAlchemy model that will require a migration, pause and say so explicitly: "this is a schema change — let's step through expand/contract before I write code".
+2. **Classify the change.** For each altered column or table, state whether it is expand-safe or contract-destructive, and why. Use the lists above.
+3. **Sequence the rollout.** If the change is contract-destructive, propose splitting it across two PRs / two deploys:
+   - PR 1: expand-only (new nullable column / backfill / code writes to both old and new).
+   - PR 2: contract (drop the old column) once PR 1 has shipped and no running container is still reading the old shape.
+   Call out explicitly which PR this is and what the next one will need to do.
+4. **Check in with the user before implementing.** Ask: "does this plan match what you expect, or should we go destructive in one shot because there are no real users yet?" The user's answer governs how the work proceeds.
+5. **Keep walking them through it.** Do this on **every** schema-change PR until the user says in chat that they are comfortable with the blue-green strategy and tells Claude to drop the hand-holding. Do not assume comfort because the conversation mentions blue-green; require an explicit "you can skip the walkthrough now".
+
+This is load-bearing: short-circuiting the walkthrough defeats the whole point of having blue-green in the first place.
+
 ### Testing
 
 - **Backend**: Set `APP_ENV=testing` to skip database connectivity checks. Tests do NOT require running PostgreSQL or Neo4j.

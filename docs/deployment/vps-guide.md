@@ -618,6 +618,151 @@ docker compose ps
 docker compose logs -f app --tail=50
 ```
 
+This approach restarts the single `app` container in place — expect ~3–10 s of 5xx while the new image starts. Active chat SSE streams will be severed (the browser will auto-reconnect via the resume endpoint once the new container is up, but the in-progress assistant turn cannot be finished on a new container; the user will see an "interrupted — retry?" state).
+
+For production use, the next phase describes a zero-downtime variant.
+
+---
+
+## Phase 13b: Zero-Downtime Redeploy (Blue-Green)
+
+Run two backend containers (`app-blue` on `:8000`, `app-green` on `:8001`) alongside the shared Postgres + Neo4j + frontend. Only one colour is "live" at a time — Caddy's `reverse_proxy` points at whichever port the deploy script writes into `/etc/caddy/active_backend.caddy`. Deploys build the idle colour, health-check it, run migrations, flip Caddy, and drain the old colour. Existing SSE streams on the old colour finish their turn during the drain window; new requests go to the new colour immediately.
+
+### 13b.1 — One-time host setup
+
+```bash
+# State directory that records which colour is currently live.
+sudo install -d -o deploy -g deploy /var/lib/agentic-doe
+echo blue | sudo tee /var/lib/agentic-doe/active-color >/dev/null
+
+# Allow the deploy user to reload Caddy without a password prompt.
+# (If you already run deploy under full sudo, skip this.)
+echo 'deploy ALL=(root) NOPASSWD: /bin/systemctl reload caddy, /usr/bin/caddy validate *' \
+  | sudo tee /etc/sudoers.d/doe-caddy-reload
+sudo chmod 0440 /etc/sudoers.d/doe-caddy-reload
+```
+
+Replace the Caddyfile from Phase 9.2 / 10.2 with this version, which imports the mutable upstream snippet:
+
+```bash
+sudo tee /etc/caddy/Caddyfile << 'EOF'
+yourdomain.com {
+    handle /api/* {
+        import /etc/caddy/active_backend.caddy
+    }
+    handle /docs* {
+        import /etc/caddy/active_backend.caddy
+    }
+    handle /openapi.json {
+        import /etc/caddy/active_backend.caddy
+    }
+    handle {
+        reverse_proxy 127.0.0.1:3000
+    }
+}
+EOF
+
+# Seed the snippet to point at port 8000 (blue).
+sudo tee /etc/caddy/active_backend.caddy << 'EOF'
+# Managed by scripts/deploy-blue-green.sh — do not edit by hand.
+reverse_proxy 127.0.0.1:8000
+EOF
+
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+The legacy `app` service (from Phase 6) binds to port 8000 and would conflict with `app-blue`. Stop it before the first blue-green deploy:
+
+```bash
+docker compose stop app
+docker compose rm -f app
+```
+
+### 13b.2 — Deploy a new version
+
+```bash
+cd /home/deploy/agentic-doe
+git pull origin main
+make deploy-bg       # interactive: prompts before each side-effect
+# or
+make deploy-bg-force # non-interactive (e.g. from CI)
+```
+
+What the script does, step by step:
+
+1. Reads `/var/lib/agentic-doe/active-color` → current colour.
+2. Builds the idle colour: `docker compose --profile <next> build app-<next>`.
+3. Starts it: `docker compose --profile <next> up -d app-<next>`.
+4. Polls `http://127.0.0.1:<next-port>/api/v1/health` until it returns 2xx.
+5. Runs `alembic upgrade head` inside the idle container.
+6. Writes a new `/etc/caddy/active_backend.caddy` pointing at the new port and `caddy validate` + `systemctl reload caddy`.
+7. Updates the state file so subsequent deploys flip back the other way.
+8. Sleeps `DRAIN_SECONDS` (default 120) so long-lived SSE streams on the old colour finish naturally.
+9. Stops the old colour container.
+
+Override the drain window if your typical chat turns are shorter (or longer):
+
+```bash
+DRAIN_SECONDS=30 make deploy-bg-force
+```
+
+### 13b.3 — Migration discipline (expand / contract)
+
+Because both colours run the same schema for the duration of each deploy, every migration in a blue-green world must be backwards-compatible with the previous code version. Follow expand / contract:
+
+- **Expand** (safe in a blue-green deploy): add a nullable column, add a new table, add an index `CONCURRENTLY`, widen a `VARCHAR`.
+- **Contract** (NOT safe in the same deploy that introduces the expand): drop a column, tighten NOT NULL, remove a table, rename a column.
+
+A destructive (contract) migration must ship in a **subsequent** deploy after the expand-only change has been rolled out and the old code is no longer running anywhere. Until the first production release there are no real users, so one-shot breaking migrations are still fine — but once live traffic is on both colours at once during a cutover, the discipline is load-bearing.
+
+### 13b.4 — Rollback
+
+Caddy's upstream is a file reload, so rolling back a bad deploy is one command as long as the old colour hasn't been stopped yet (i.e. you are inside the drain window):
+
+```bash
+make rollback-bg
+```
+
+This flips the Caddy snippet back to the previous port and reloads Caddy — no container rebuild, typically sub-second recovery. If the drain window has already expired, restart the previous colour first:
+
+```bash
+docker compose --profile blue up -d app-blue   # or app-green
+make rollback-bg
+```
+
+### 13b.5 — What happens to in-flight chat streams?
+
+- **New requests** after Caddy reload: served by the new colour.
+- **SSE streams already open** on the old colour: stay connected on the old colour until the drain window expires, at which point the container is stopped and the TCP connection closes.
+- **Client-side**: the SvelteKit chat page tracks the `Last-Event-ID` of every SSE event and, on disconnect, calls `GET /api/v1/chat/{conversation_id}/resume` with that header. The new colour replays any events the client missed from `chat_events` and, if the original turn was cut short by the container stop, emits a synthetic `interrupted` event so the UI can offer a retry.
+
+This means blue-green gets you to ~95% SSE-stream preservation with no application-level coordination. The remaining 5% is turns that cross the drain boundary — those are gracefully surfaced as an interruption, not a silent failure.
+
+### 13b.6 — Verification
+
+From your laptop during a deploy:
+
+```bash
+# Uptime probe (should stay 2xx throughout).
+while true; do
+  curl -s -o /dev/null -w "%{http_code} %{time_total}\n" https://yourdomain.com/api/v1/health
+  sleep 0.2
+done
+
+# SSE survival: open a slow chat turn in the browser during the deploy
+# and confirm the stream either completes cleanly (drain path) or
+# resumes and surfaces an 'interrupted' state (drain-expired path).
+```
+
+From the VPS after a deploy:
+
+```bash
+cat /var/lib/agentic-doe/active-color
+docker compose ps
+docker compose logs -f app-green --tail=50    # or app-blue
+```
+
 ---
 
 ## Phase 14: Backups

@@ -1,5 +1,5 @@
 from app.models.admin_event import AdminEvent  # noqa: F401
-from app.models.conversation import Conversation, Message, ToolCall  # noqa: F401
+from app.models.conversation import ChatEvent, Conversation, Message, ToolCall  # noqa: F401
 from app.models.experiment import Experiment  # noqa: F401
 from app.models.experiment_share import ExperimentShare  # noqa: F401
 from app.models.role import Role  # noqa: F401
