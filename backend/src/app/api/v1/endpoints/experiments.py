@@ -29,7 +29,7 @@ from app.schemas.shares import (
 )
 from app.services import experiment_service, export_service, share_service
 from app.services.exceptions import ToolExecutionError
-from app.services.tools import execute_tool_call
+from app.services.tools import execute_tool_call_async
 
 router = APIRouter()
 
@@ -243,9 +243,9 @@ async def evaluate_experiment(
         tool_input["alpha"] = body.alpha
 
     try:
-        evaluation = execute_tool_call("evaluate_design", tool_input)
+        evaluation, _duration = await execute_tool_call_async("evaluate_design", tool_input)
     except ToolExecutionError as exc:
-        raise HTTPException(status_code=400, detail=exc.message) from exc
+        raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
 
     if isinstance(evaluation, dict) and "error" in evaluation:
         raise HTTPException(status_code=400, detail=str(evaluation["error"]))

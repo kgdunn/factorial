@@ -59,6 +59,24 @@ class Settings(BaseSettings):
     auth_rate_limit: str = "5/minute"
     register_rate_limit: str = "3/hour"
 
+    # Tool execution
+    # ``tool_safe_mode`` routes process_improve calls through
+    # safe_execute_tool_call (subprocess isolation + timeout + memory cap).
+    # Disable in tests / notebooks for speed; leave on in hosted deployments.
+    tool_safe_mode: bool = True
+    tool_timeout_seconds: float = 300.0
+    tool_memory_mb: int = 2048
+    tool_max_cells: int = 1_000_000
+    tool_max_string: int = 100_000
+
+    # MCP server (hosted). Exposes the process_improve tool registry over
+    # HTTP + SSE. Gated by auth + per-identity CPU budget; off by default
+    # until an operator explicitly turns it on.
+    mcp_enabled: bool = False
+    mcp_rate_limit: str = "30/minute"
+    mcp_daily_cpu_seconds: int = 3600
+    mcp_path_prefix: str = "/mcp"
+
     # JWT Authentication
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"

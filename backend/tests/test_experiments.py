@@ -339,11 +339,14 @@ class TestEvaluateEndpoint:
 
         with (
             patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc,
-            patch("app.api.v1.endpoints.experiments.execute_tool_call") as mock_exec,
+            patch(
+                "app.api.v1.endpoints.experiments.execute_tool_call_async",
+                new_callable=AsyncMock,
+            ) as mock_exec,
         ):
             mock_svc.get_experiment = AsyncMock(return_value=fake)
             mock_svc.attach_evaluation = AsyncMock(return_value=fake_updated)
-            mock_exec.return_value = evaluation
+            mock_exec.return_value = (evaluation, 0.01)
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -397,10 +400,13 @@ class TestEvaluateEndpoint:
         fake = _FakeExperiment()
         with (
             patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc,
-            patch("app.api.v1.endpoints.experiments.execute_tool_call") as mock_exec,
+            patch(
+                "app.api.v1.endpoints.experiments.execute_tool_call_async",
+                new_callable=AsyncMock,
+            ) as mock_exec,
         ):
             mock_svc.get_experiment = AsyncMock(return_value=fake)
-            mock_exec.return_value = {"error": "design not evaluable"}
+            mock_exec.return_value = ({"error": "design not evaluable"}, 0.01)
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:

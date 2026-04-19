@@ -8,12 +8,14 @@ from app.api.v1.endpoints import (
     designs,
     experiments,
     health,
+    mcp,
     password_reset,
     roles,
     shares_public,
     signup,
     tools,
 )
+from app.config import settings
 
 api_v1_router = APIRouter()
 
@@ -44,3 +46,9 @@ api_v1_router.include_router(designs.router, prefix="/designs", tags=["designs"]
 api_v1_router.include_router(chat.router, prefix="/chat", tags=["chat"], dependencies=_auth)
 api_v1_router.include_router(tools.router, prefix="/tools", tags=["tools"], dependencies=_auth)
 api_v1_router.include_router(experiments.router, prefix="/experiments", tags=["experiments"], dependencies=_auth)
+
+# Hosted MCP endpoint: off by default. Mounts only when operators
+# explicitly enable it. Auth + per-identity CPU budget + rate limit
+# are enforced inside the router itself.
+if settings.mcp_enabled:
+    api_v1_router.include_router(mcp.router, prefix=settings.mcp_path_prefix, tags=["mcp"])

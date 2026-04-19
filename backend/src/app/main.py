@@ -66,8 +66,13 @@ app.include_router(api_v1_router, prefix="/api/v1")
 
 @app.exception_handler(ToolExecutionError)
 async def tool_execution_error_handler(request, exc: ToolExecutionError):
-    """Return a structured 422 response when a DOE tool call fails."""
+    """Return a structured response when a DOE tool call fails.
+
+    Status is taken from the exception's ``http_status`` class attribute
+    so subclasses map to 408 (timeout), 413 (input too large), 429
+    (budget exceeded), or 507 (memory cap) rather than a generic 422.
+    """
     content = {"error": exc.message}
     if exc.tool_name:
         content["tool_name"] = exc.tool_name
-    return JSONResponse(status_code=422, content=content)
+    return JSONResponse(status_code=exc.http_status, content=content)
