@@ -15,7 +15,7 @@ import datetime as dt
 import uuid
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, Text, func, text
+from sqlalchemy import JSON, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,9 +40,9 @@ class AdminEvent(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     payload: Mapped[dict[str, Any]] = mapped_column(
-        JSONB,
+        JSON().with_variant(JSONB(), "postgresql"),
         nullable=False,
-        server_default=text("'{}'::jsonb"),
+        default=dict,
     )
 
     started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
