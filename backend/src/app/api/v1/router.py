@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import require_auth
 from app.api.v1.endpoints import (
+    admin_feedback,
     admin_users,
     auth,
     chat,
     designs,
     experiments,
+    feedback,
     health,
     mcp,
     password_reset,
@@ -37,6 +39,11 @@ api_v1_router.include_router(roles.router, prefix="/roles", tags=["roles"])
 # Admin user management.
 api_v1_router.include_router(admin_users.router, prefix="/admin/users", tags=["admin-users"])
 
+# Admin feedback inbox: list, reply, mark-replied (admin-only dependency is
+# enforced inside the router, not here, so it's safe to include without
+# wrapping in `_auth`).
+api_v1_router.include_router(admin_feedback.router, prefix="/admin/feedback", tags=["admin-feedback"])
+
 # Public share endpoints: no auth — viewers use a revocable token.
 api_v1_router.include_router(shares_public.router, prefix="/public", tags=["public-shares"])
 
@@ -46,6 +53,7 @@ api_v1_router.include_router(designs.router, prefix="/designs", tags=["designs"]
 api_v1_router.include_router(chat.router, prefix="/chat", tags=["chat"], dependencies=_auth)
 api_v1_router.include_router(tools.router, prefix="/tools", tags=["tools"], dependencies=_auth)
 api_v1_router.include_router(experiments.router, prefix="/experiments", tags=["experiments"], dependencies=_auth)
+api_v1_router.include_router(feedback.router, prefix="/feedback", tags=["feedback"], dependencies=_auth)
 
 # Hosted MCP endpoint: off by default. Mounts only when operators
 # explicitly enable it. Auth + per-identity CPU budget + rate limit
