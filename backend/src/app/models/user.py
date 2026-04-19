@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -37,6 +38,14 @@ class User(Base):
     )
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_ip: Mapped[str | None] = mapped_column(
+        String(45).with_variant(INET(), "postgresql"),
+        nullable=True,
+    )
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     role = relationship("Role", lazy="joined", foreign_keys=[role_id])
 
