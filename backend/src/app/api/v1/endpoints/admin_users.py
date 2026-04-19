@@ -22,6 +22,29 @@ from app.services.email_service import send_setup_email
 router = APIRouter()
 
 
+def _detail_from(user, aggregates) -> AdminUserDetail:  # type: ignore[no-untyped-def]
+    base = AdminUserDetail.model_validate(user)
+    agg = aggregates.get(user.id)
+    if agg is None:
+        return base
+    return base.model_copy(
+        update={
+            "total_cost_usd": agg.total_cost_usd,
+            "total_markup_cost_usd": agg.total_markup_cost_usd,
+            "total_tokens": agg.total_tokens,
+            "conversation_count": agg.conversation_count,
+            "last_conversation_at": agg.last_conversation_at,
+            "feedback_count": agg.feedback_count,
+            "open_experiments": agg.open_experiments,
+            "avg_runs_per_experiment": agg.avg_runs_per_experiment,
+            "balance_usd": agg.balance_usd,
+            "balance_tokens": agg.balance_tokens,
+            "signup_status": agg.signup_status,
+            "disclaimers_accepted": agg.disclaimers_accepted,
+        }
+    )
+
+
 @router.get("", response_model=AdminUserListResponse)
 async def list_users(
     page: int = Query(1, ge=1),
@@ -31,11 +54,11 @@ async def list_users(
     _admin: AuthUser = Depends(require_admin),
     db: AsyncSession = Depends(get_db_session),
 ) -> AdminUserListResponse:
-    users, total = await admin_service.list_users(
+    users, aggregates, total = await admin_service.list_users(
         db, page=page, page_size=page_size, search=search, admins_only=admins_only
     )
     return AdminUserListResponse(
-        users=[AdminUserDetail.model_validate(u) for u in users],
+        users=[_detail_from(u, aggregates) for u in users],
         total=total,
         page=page,
         page_size=page_size,
