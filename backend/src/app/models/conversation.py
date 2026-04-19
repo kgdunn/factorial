@@ -18,7 +18,20 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -187,6 +200,29 @@ class ToolCall(Base):
     # Ordering within the agent loop
     agent_turn: Mapped[int] = mapped_column(Integer, default=1)
     call_order: Mapped[int] = mapped_column(Integer, default=1)
+
+    # Groups every tool call that belongs to the same user turn.
+    # Matches ``ChatEvent.turn_id``. Nullable for rows written before 0004.
+    turn_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+
+    # Which orchestrating model produced this tool call.
+    model_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # Process-wide system snapshot at the moment the tool finished.
+    # These are NOT per-tool measurements: they describe the condition
+    # the backend process was in, not the tool's own cost.
+    rss_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cpu_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Payload sizes (JSON-serialised length in bytes). Cheap cost proxy.
+    input_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Reserved for a future output size-cap policy; defaults to false.
+    output_truncated: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+
+    # Optional version string reported by the tool implementation.
+    tool_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Timestamps
     created_at: Mapped[str] = mapped_column(

@@ -269,6 +269,55 @@ class TestChatEndpointMocked:
         assert c.total_markup_cost_usd > c.total_cost_usd
 
     @pytest.mark.asyncio
+    async def test_tool_call_telemetry_persisted(self):
+        """Verify turn_id, model_key, RSS/CPU, and payload-size telemetry land on persisted ToolCall rows."""
+        from app.models.conversation import ToolCall
+
+        tool_response = MockResponse(
+            content=[
+                MockTextBlock(text="Let me create a design."),
+                MockToolUseBlock(
+                    id="toolu_telemetry_001",
+                    name="create_design",
+                    input={"factors": [{"name": "A", "low": 0, "high": 1}]},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        summary_response = MockResponse(
+            content=[MockTextBlock(text="Done.")],
+            stop_reason="end_turn",
+        )
+        mock_client = _make_mock_client([tool_response, summary_response])
+        session = _NoOpAsyncSession()
+
+        with (
+            patch("app.services.agent_service.get_anthropic_client", return_value=mock_client),
+            patch("app.services.agent_service.async_session_factory", return_value=session),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                await ac.post("/api/v1/chat", json={"message": "Create a 2-factor design"})
+
+        tool_calls = [o for o in session.added if isinstance(o, ToolCall)]
+        assert tool_calls, "expected at least one persisted ToolCall row"
+        tc = tool_calls[0]
+        assert tc.turn_id is not None
+        assert tc.model_key is not None and tc.model_key != ""
+        assert tc.input_bytes is not None and tc.input_bytes > 0
+        # Successful tool calls should have an output-size figure too.
+        if tc.status == "success":
+            assert tc.output_bytes is not None and tc.output_bytes > 0
+        # psutil sampling is best-effort but should almost always succeed in tests.
+        assert tc.rss_bytes is not None and tc.rss_bytes > 0
+        assert tc.cpu_percent is not None
+        assert tc.output_truncated is False
+
+        # All tools from the same chat turn should share the same turn_id.
+        turn_ids = {t.turn_id for t in tool_calls}
+        assert len(turn_ids) == 1
+
+    @pytest.mark.asyncio
     async def test_missing_api_key_returns_error_event(self):
         """When ANTHROPIC_API_KEY is empty, an error SSE event is emitted."""
         with (

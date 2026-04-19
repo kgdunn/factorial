@@ -25,6 +25,7 @@ from decimal import Decimal
 from typing import Any
 
 import anthropic
+import psutil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import ServerSentEvent
@@ -160,6 +161,7 @@ def _run_agent_loop(
     tool_specs: list[dict[str, Any]],
     client: anthropic.Anthropic,
     model: str,
+    turn_id: uuid.UUID,
 ) -> dict[str, Any]:
     """Synchronous agent loop executed in a background thread.
 
@@ -238,6 +240,7 @@ def _run_agent_loop(
             for call_order, tool_block in enumerate(tool_use_blocks, start=1):
                 event_queue.put(("tool_start", {"tool": tool_block.name, "input": tool_block.input}))
 
+                input_bytes = len(json.dumps(tool_block.input, default=str).encode("utf-8"))
                 record: dict[str, Any] = {
                     "tool_use_id": tool_block.id,
                     "tool_name": tool_block.name,
@@ -245,12 +248,17 @@ def _run_agent_loop(
                     "agent_turn": agent_turn,
                     "call_order": call_order,
                     "started_at": datetime.now(UTC),
+                    "turn_id": turn_id,
+                    "model_key": model,
+                    "input_bytes": input_bytes,
+                    "output_truncated": False,
                 }
 
                 t0 = time.perf_counter()
                 try:
                     result = execute_tool_call(tool_block.name, tool_block.input)
                     duration_ms = int((time.perf_counter() - t0) * 1000)
+                    output_bytes = len(json.dumps(result, default=str).encode("utf-8"))
 
                     record.update(
                         {
@@ -258,6 +266,7 @@ def _run_agent_loop(
                             "status": "success",
                             "completed_at": datetime.now(UTC),
                             "duration_ms": duration_ms,
+                            "output_bytes": output_bytes,
                         }
                     )
 
@@ -298,6 +307,19 @@ def _run_agent_loop(
                             "is_error": True,
                         }
                     )
+
+                # Process-wide system snapshot at tool finish. NOT per-tool:
+                # in a multi-worker process the numbers describe the whole
+                # backend, not this tool's own cost. Best read as "what was
+                # the system doing when this tool ended".
+                try:
+                    proc = psutil.Process()
+                    record["rss_bytes"] = proc.memory_info().rss
+                    record["cpu_percent"] = proc.cpu_percent(interval=None)
+                except psutil.Error:
+                    # Telemetry must never break the agent loop.
+                    record["rss_bytes"] = None
+                    record["cpu_percent"] = None
 
                 tool_call_records.append(record)
 
@@ -535,6 +557,14 @@ async def _persist_tool_calls(
             duration_ms=rec.get("duration_ms"),
             agent_turn=rec.get("agent_turn", 1),
             call_order=rec.get("call_order", 1),
+            turn_id=rec.get("turn_id"),
+            model_key=rec.get("model_key"),
+            rss_bytes=rec.get("rss_bytes"),
+            cpu_percent=rec.get("cpu_percent"),
+            input_bytes=rec.get("input_bytes"),
+            output_bytes=rec.get("output_bytes"),
+            output_truncated=rec.get("output_truncated", False),
+            tool_version=rec.get("tool_version"),
         )
         db.add(tc)
 
@@ -689,6 +719,7 @@ async def run_chat(
                 tool_specs,
                 client,
                 settings.anthropic_model,
+                turn_id,
             )
 
             # 6. Stream SSE events from the queue — persist each one
