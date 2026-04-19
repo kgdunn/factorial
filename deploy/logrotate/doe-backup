@@ -1,0 +1,19 @@
+# /etc/logrotate.d/doe-backup  (owner root:root, mode 0644)
+#
+# Install:
+#   sudo cp deploy/logrotate/doe-backup /etc/logrotate.d/doe-backup
+#   sudo chown root:root /etc/logrotate.d/doe-backup
+#   sudo chmod 0644 /etc/logrotate.d/doe-backup
+#
+# Keeps 30 days of run logs for backup / restore / restore-drill.
+# The dump files themselves live in S3, not on disk, so this is
+# only rotating the tee'd stdout+stderr from the scripts.
+/var/log/doe/backup-*.log /var/log/doe/restore-*.log /var/log/doe/drill-*.log {
+    daily
+    rotate 30
+    missingok
+    compress
+    delaycompress
+    notifempty
+    create 0640 deploy deploy
+}

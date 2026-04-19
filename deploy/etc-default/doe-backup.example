@@ -1,0 +1,60 @@
+# /etc/default/doe-backup  (owner root:root, mode 0644)
+#
+# This file is sourced by the backup + restore + drill scripts so
+# that cron (which has a minimal environment) can still reach
+# Hetzner Object Storage. Put it at /etc/default/doe-backup on the
+# VPS and fill in the values below.
+#
+# Install:
+#   sudo cp deploy/etc-default/doe-backup.example /etc/default/doe-backup
+#   sudo chown root:root /etc/default/doe-backup
+#   sudo chmod 0644 /etc/default/doe-backup
+#   sudoedit /etc/default/doe-backup
+
+# --- REQUIRED ----------------------------------------------------------
+
+# S3-compatible endpoint. Hetzner options:
+#   https://fsn1.your-objectstorage.com   (Falkenstein)
+#   https://nbg1.your-objectstorage.com   (Nuremberg)
+S3_ENDPOINT_URL=https://fsn1.your-objectstorage.com
+
+# Bucket name (must already exist in the Hetzner Console).
+S3_BUCKET=doe-db-backups-prod
+
+# AWS CLI profile holding the Hetzner access key + secret.
+# Corresponds to a [doe-backup] section in ~/.aws/credentials on the
+# deploy user. See scripts/README.md step 3.
+AWS_PROFILE=doe-backup
+
+# Path to the repo checkout on the VPS.
+REPO_DIR=/home/deploy/agentic-doe
+
+# --- OPTIONAL ----------------------------------------------------------
+
+# Per-run log directory. Must be writable by the deploy user.
+LOG_DIR=/var/log/doe
+
+# Disk-space guard (MiB free required in $LOG_DIR's filesystem, on
+# top of 1.5x the current DB size). Default: 2048.
+# MIN_FREE_MB=2048
+
+# pg_dump timeout in seconds. Default: 1800 (30 min).
+# BACKUP_TIMEOUT=1800
+
+# pg_restore timeout in seconds. Default: 3600 (1 h).
+# RESTORE_TIMEOUT=3600
+
+# Key prefix inside the bucket. Default: postgres. The retention
+# class (daily/weekly/monthly) is appended below this.
+# S3_PREFIX=postgres
+
+# healthchecks.io dead-man's switch. The scripts ping:
+#   $HC_PING_URL/start   at the beginning
+#   $HC_PING_URL         on success
+#   $HC_PING_URL/fail    on failure (with the last 200 log lines)
+# Catches missed cron runs — cron's MAILTO cannot.
+# HC_PING_URL=https://hc-ping.com/00000000-0000-0000-0000-000000000000
+
+# Slack / Discord / generic webhook for failure alerts. Script POSTs
+# a small JSON document describing the failure.
+# WEBHOOK_URL=https://hooks.slack.com/services/T000/B000/xxxxxx

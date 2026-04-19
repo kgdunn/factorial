@@ -2,7 +2,8 @@
        logs logs-app logs-frontend \
        clean lint format test migrate \
        frontend-install frontend-dev frontend-build \
-       docs-serve docs-build
+       docs-serve docs-build \
+       backup-db backup-db-dry-run restore-db-list
 
 # ── Help (default target) ───────────────────────────────
 
@@ -35,6 +36,11 @@ help:
 	@echo "  logs-app           Tail backend (FastAPI) logs only"
 	@echo "  logs-frontend      Tail frontend (nginx) logs only"
 	@echo "  clean              Tear down Docker services and remove caches"
+	@echo ""
+	@echo "Backups (S3-compatible, see scripts/README.md):"
+	@echo "  backup-db-dry-run  Preflight the backup script (no dump, no upload)"
+	@echo "  backup-db          Run a one-off ad-hoc backup (daily class)"
+	@echo "  restore-db-list    List recent backups in the configured S3 bucket"
 
 # ── Backend ──────────────────────────────────────────────
 
@@ -129,3 +135,17 @@ clean:
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name node_modules -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .svelte-kit -exec rm -rf {} + 2>/dev/null || true
+
+# ── Backups ──────────────────────────────────────────────
+# Convenience wrappers around scripts/{backup,restore}-postgres.sh.
+# Requires /etc/default/doe-backup (or equivalent env) for
+# S3_ENDPOINT_URL, S3_BUCKET, AWS_PROFILE. See scripts/README.md.
+
+backup-db-dry-run:
+	REPO_DIR=$(CURDIR) ./scripts/backup-postgres.sh --dry-run
+
+backup-db:
+	REPO_DIR=$(CURDIR) ./scripts/backup-postgres.sh
+
+restore-db-list:
+	REPO_DIR=$(CURDIR) ./scripts/restore-postgres.sh --list
