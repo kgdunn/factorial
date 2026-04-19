@@ -622,17 +622,53 @@ docker compose logs -f app --tail=50
 
 ## Phase 14: Backups
 
-### PostgreSQL
+### PostgreSQL — production backup/restore tooling
+
+PostgreSQL backups are handled by two shell scripts that ship in the repo:
+
+- `scripts/backup-postgres.sh` — dumps the DB (via `pg_dump` in the `postgres` container), uploads the dump to an S3-compatible object store (Hetzner Object Storage, by default), verifies the upload, and records run status in the `admin_events` table.
+- `scripts/restore-postgres.sh` — lists available backups, downloads one, verifies its checksum, and restores it back into the running stack.
+
+Both scripts are verbose by design (step-by-step output + end-of-run `SUCCESS` / `FAILED` summary) and check credentials **before** touching the database.
+
+**Full operator runbook:** see [`scripts/README.md`](https://github.com/kgdunn/agentic-doe/blob/main/scripts/README.md) for one-time setup (Hetzner bucket + Object Lock + lifecycle rules + credentials on the VPS + cron installation).
+
+High-level shape once set up:
+
+| Concern | How it's handled |
+|---|---|
+| Storage | Hetzner Object Storage (S3-compatible) — same region as the VPS, free internal traffic |
+| Credentials | AWS CLI profile `doe-backup` on the `deploy` user (`~/.aws/credentials`, 0600) |
+| Retention | Grandfather-Father-Son: `postgres/daily/` (35d), `postgres/weekly/` (100d), `postgres/monthly/` (400d) — enforced by Hetzner **bucket lifecycle rules**, not by script-side deletion |
+| Immutability | Hetzner Object Lock (WORM, compliance mode) on the bucket — stolen credentials cannot delete backups within the retention window |
+| Encryption | `--sse AES256` on every upload |
+| Integrity | `sha256` computed locally + written to object metadata + verified on both upload and restore |
+| Run logs | Per-run log file at `/var/log/doe/backup-<UTC-stamp>.log` (rotated via logrotate) |
+| Run history | `admin_events` table — rows for `in_progress` / `success` / `failed`, with payload: size, sha, s3 key, alembic head, git sha, duration |
+| Dead-man's switch | Optional healthchecks.io URL (`HC_PING_URL`) — pings `/start`, success, `/fail`. Alerts on missed runs, which cron MAILTO cannot. |
+| Failure webhook | Optional `WEBHOOK_URL` — Slack/Discord POST on failure |
+| Concurrency | `flock` on `/var/lock/doe-backup.lock` |
+| Restore drill | Weekly `scripts/restore-drill.sh` — restores latest backup to a scratch DB, runs smoke queries, drops it, logs `restore_drill` event |
+
+Quick ad-hoc commands (once the scripts are installed and credentials are configured):
 
 ```bash
-# Backup:
-docker compose exec postgres pg_dump -U doe_user doe_db > backup_$(date +%Y%m%d_%H%M%S).sql
+# Manual backup (daily-class)
+./scripts/backup-postgres.sh
 
-# Restore:
-cat backup_YYYYMMDD_HHMMSS.sql | docker compose exec -T postgres psql -U doe_user doe_db
+# List recent backups in S3
+./scripts/restore-postgres.sh --list
+
+# Restore the latest backup (interactive confirmation required)
+./scripts/restore-postgres.sh
+
+# Dry-run (preflight + verification, no side effects)
+./scripts/backup-postgres.sh --dry-run
 ```
 
 ### Neo4j
+
+> Neo4j backup is **out of scope** for the current tooling. For now, use the manual snapshot below.
 
 ```bash
 docker compose stop neo4j
@@ -645,16 +681,24 @@ docker compose start neo4j
 
 ### Automated daily backup (cron)
 
+Cron entries are version-controlled at [`deploy/cron/doe-backup.cron`](https://github.com/kgdunn/agentic-doe/blob/main/deploy/cron/doe-backup.cron). Install with:
+
 ```bash
-mkdir -p /home/deploy/backups
-crontab -e
+sudo cp /home/deploy/agentic-doe/deploy/cron/doe-backup.cron /etc/cron.d/doe-backup
+sudo chown root:root /etc/cron.d/doe-backup
+sudo chmod 0644 /etc/cron.d/doe-backup
 ```
 
-Add:
+Schedule (all times UTC, offset off the hour to avoid platform-wide cron pile-ups):
 
-```cron
-0 3 * * * cd /home/deploy/agentic-doe && docker compose exec -T postgres pg_dump -U doe_user doe_db | gzip > /home/deploy/backups/pg_$(date +\%Y\%m\%d).sql.gz 2>/dev/null
-```
+| When | What |
+|---|---|
+| Daily 03:07 | `backup-postgres.sh daily` |
+| Sunday 03:30 | `backup-postgres.sh weekly` |
+| 1st of month 04:00 | `backup-postgres.sh monthly` |
+| Monday 04:30 | `restore-drill.sh` |
+
+Log rotation is handled by [`deploy/logrotate/doe-backup`](https://github.com/kgdunn/agentic-doe/blob/main/deploy/logrotate/doe-backup), installed into `/etc/logrotate.d/`.
 
 ---
 
