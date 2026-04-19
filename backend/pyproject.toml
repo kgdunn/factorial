@@ -1,6 +1,6 @@
 [project]
 name = "agentic-doe"
-version = "0.9.1"
+version = "0.10.0"
 description = "Backend for AI agent-based Design of Experiments analysis"
 license = { text = "BSD-3-Clause" }
 requires-python = ">=3.11"
