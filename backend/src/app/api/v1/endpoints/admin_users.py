@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import AuthUser, require_admin
 from app.db.session import get_db_session
 from app.schemas.admin_user import (
+    AdminBalanceResponse,
+    AdminBalanceTopUpRequest,
     AdminUserDetail,
     AdminUserListResponse,
     AdminUserResetPasswordResponse,
     AdminUserUpdateRequest,
 )
-from app.services import admin_service, role_service, setup_token_service
+from app.services import admin_service, balance_service, role_service, setup_token_service
 from app.services.email_service import send_setup_email
 
 router = APIRouter()
@@ -130,4 +132,32 @@ async def reset_user_password(
     return AdminUserResetPasswordResponse(
         message=f"Reset link issued for {user.email}",
         url=url,
+    )
+
+
+@router.post("/{user_id}/balance/topup", response_model=AdminBalanceResponse)
+async def top_up_user_balance(
+    user_id: uuid.UUID,
+    body: AdminBalanceTopUpRequest,
+    current_admin: AuthUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_db_session),
+) -> AdminBalanceResponse:
+    """Credit ``usd`` and/or ``tokens`` to a user's balance. Audited as an admin_event."""
+    from app.services.auth_service import get_user_by_id
+
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    balance = await balance_service.top_up(
+        db,
+        user_id=user.id,
+        usd=body.usd,
+        tokens=body.tokens,
+        actor_email=current_admin.email,
+    )
+    return AdminBalanceResponse(
+        user_id=user.id,
+        balance_usd=balance.balance_usd,
+        balance_tokens=balance.balance_tokens,
     )
