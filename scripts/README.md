@@ -181,6 +181,14 @@ The cron schedule is (all times UTC):
 
 ### Tail the admin event history
 
+Signed in as an admin in the app, open `/admin/events` — the page lists
+recent rows from `admin_events` with event-type / status filters and a
+row-expand that shows the full JSONB payload and (if present)
+`error_message`.
+
+For an offline check (e.g. if the app is down), the same data is one
+SQL query away:
+
 ```sql
 SELECT created_at, event_type, status,
        payload->>'s3_key' AS s3_key,

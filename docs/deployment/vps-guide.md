@@ -789,7 +789,7 @@ High-level shape once set up:
 | Encryption | `--sse AES256` on every upload |
 | Integrity | `sha256` computed locally + written to object metadata + verified on both upload and restore |
 | Run logs | Per-run log file at `/var/log/doe/backup-<UTC-stamp>.log` (rotated via logrotate) |
-| Run history | `admin_events` table — rows for `in_progress` / `success` / `failed`, with payload: size, sha, s3 key, alembic head, git sha, duration |
+| Run history | `admin_events` table — rows for `in_progress` / `success` / `failed`, with payload: size, sha, s3 key, alembic head, git sha, duration. Viewable in the app at `/admin/events` (filter by `event_type=postgres_backup`). |
 | Dead-man's switch | Optional healthchecks.io URL (`HC_PING_URL`) — pings `/start`, success, `/fail`. Alerts on missed runs, which cron MAILTO cannot. |
 | Failure webhook | Optional `WEBHOOK_URL` — Slack/Discord POST on failure |
 | Concurrency | `flock` on `/var/lock/doe-backup.lock` |
