@@ -557,6 +557,14 @@ async def _persist_tool_calls(
             duration_ms=rec.get("duration_ms"),
             agent_turn=rec.get("agent_turn", 1),
             call_order=rec.get("call_order", 1),
+            turn_id=rec.get("turn_id"),
+            model_key=rec.get("model_key"),
+            rss_bytes=rec.get("rss_bytes"),
+            cpu_percent=rec.get("cpu_percent"),
+            input_bytes=rec.get("input_bytes"),
+            output_bytes=rec.get("output_bytes"),
+            output_truncated=rec.get("output_truncated", False),
+            tool_version=rec.get("tool_version"),
         )
         db.add(tc)
 
