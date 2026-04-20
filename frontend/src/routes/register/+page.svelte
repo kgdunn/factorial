@@ -163,7 +163,7 @@
 
         <div>
           <label for="useCase" class="block text-sm font-medium text-gray-700">
-            Why do you want to use Agentic DOE?
+            Why do you want to use Factorial?
           </label>
           <textarea
             id="useCase"

@@ -3,12 +3,12 @@
 </script>
 
 <svelte:head>
-  <title>Agentic DOE</title>
+  <title>Factorial</title>
 </svelte:head>
 
 <div class="flex h-full flex-col items-center justify-center bg-surface px-6 text-center">
   <h1 class="text-4xl font-bold text-gray-800">
-    Agentic <span class="text-primary">DOE</span>
+    <span class="text-primary">Factorial</span>
   </h1>
   <p class="mt-4 max-w-md text-lg text-gray-500">
     Design, run, and analyse experiments through a conversational agent,

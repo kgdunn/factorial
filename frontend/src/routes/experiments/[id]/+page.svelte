@@ -93,7 +93,7 @@
 </script>
 
 <svelte:head>
-  <title>{exp?.name ?? 'Experiment'} | Agentic DOE</title>
+  <title>{exp?.name ?? 'Experiment'} | Factorial</title>
 </svelte:head>
 
 <div class="h-full overflow-y-auto">

@@ -78,7 +78,7 @@
 </script>
 
 <svelte:head>
-  <title>{view?.name ?? 'Shared Experiment'} | Agentic DOE</title>
+  <title>{view?.name ?? 'Shared Experiment'} | Factorial</title>
 </svelte:head>
 
 <div class="min-h-full overflow-y-auto bg-gray-50">
@@ -198,7 +198,7 @@
       </div>
 
       <p class="mt-6 text-center text-xs text-gray-400">
-        This is a read-only snapshot shared via Agentic DOE.
+        This is a read-only snapshot shared via Factorial.
       </p>
     {/if}
   </div>
