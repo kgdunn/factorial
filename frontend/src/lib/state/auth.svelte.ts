@@ -4,7 +4,7 @@
  * Stores tokens in localStorage and provides login/register/logout functions.
  */
 
-import { postLogin, postRefresh, postRegister } from '$lib/api/auth';
+import { getMe, postLogin, postRefresh, postRegister } from '$lib/api/auth';
 import type { UserProfile } from '$lib/api/auth';
 import { postInviteRegister } from '$lib/api/signup';
 
@@ -33,6 +33,20 @@ class AuthState {
           localStorage.removeItem(USER_KEY);
         }
       }
+      if (this.accessToken) {
+        void this.refreshUser();
+      }
+    }
+  }
+
+  private async refreshUser(): Promise<void> {
+    if (!this.accessToken) return;
+    try {
+      const profile = await getMe(this.accessToken);
+      this.persistUser(profile);
+    } catch {
+      // Silent fallback to cached localStorage copy; a 401 will be caught
+      // on the next authenticated request and trigger a proper logout.
     }
   }
 
@@ -54,9 +68,22 @@ class AuthState {
     try {
       const tokens = await postLogin(email, password);
       this.persistTokens(tokens.access_token, tokens.refresh_token);
+      await this.hydrateUser(tokens.access_token);
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : 'Login failed';
+      throw err;
+    } finally {
+      this.isLoading = false;
+    }
+  }
 
-      // Decode user info from access token payload
-      const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
+  private async hydrateUser(accessToken: string): Promise<void> {
+    try {
+      this.persistUser(await getMe(accessToken));
+    } catch {
+      // Fall back to a stub derived from the JWT payload so the UI still
+      // has an identity to render; balance/is_admin will populate on retry.
+      const payload = JSON.parse(atob(accessToken.split('.')[1]));
       this.persistUser({
         id: payload.sub,
         email: payload.email,
@@ -64,12 +91,9 @@ class AuthState {
         background: null,
         is_admin: false,
         created_at: null,
+        balance_usd: null,
+        balance_tokens: null,
       });
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Login failed';
-      throw err;
-    } finally {
-      this.isLoading = false;
     }
   }
 
@@ -84,16 +108,7 @@ class AuthState {
     try {
       const tokens = await postRegister(email, password, displayName, background);
       this.persistTokens(tokens.access_token, tokens.refresh_token);
-
-      const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
-      this.persistUser({
-        id: payload.sub,
-        email: payload.email,
-        display_name: displayName || null,
-        background: background || null,
-        is_admin: false,
-        created_at: null,
-      });
+      await this.hydrateUser(tokens.access_token);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Registration failed';
       throw err;
@@ -112,16 +127,7 @@ class AuthState {
     try {
       const tokens = await postInviteRegister(token, password, displayName);
       this.persistTokens(tokens.access_token, tokens.refresh_token);
-
-      const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
-      this.persistUser({
-        id: payload.sub,
-        email: payload.email,
-        display_name: displayName || null,
-        background: null,
-        is_admin: false,
-        created_at: null,
-      });
+      await this.hydrateUser(tokens.access_token);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Registration failed';
       throw err;
@@ -137,15 +143,7 @@ class AuthState {
       const { postSetupComplete } = await import('$lib/api/auth');
       const tokens = await postSetupComplete(token, password);
       this.persistTokens(tokens.access_token, tokens.refresh_token);
-      const payload = JSON.parse(atob(tokens.access_token.split('.')[1]));
-      this.persistUser({
-        id: payload.sub,
-        email: payload.email,
-        display_name: null,
-        background: null,
-        is_admin: false,
-        created_at: null,
-      });
+      await this.hydrateUser(tokens.access_token);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Setup failed';
       throw err;

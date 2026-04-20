@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthUser, require_auth
+from app.api.deps import SERVICE_USER_ID, AuthUser, require_auth
 from app.api.rate_limit import limiter
 from app.config import settings
 from app.db.session import get_db_session
@@ -19,6 +19,7 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
+from app.services import balance_service
 from app.services.auth_service import (
     authenticate_user,
     create_access_token,
@@ -122,8 +123,17 @@ async def refresh(
 @router.get("/me", response_model=UserResponse)
 async def get_me(
     current_user: AuthUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
     """Get the current authenticated user's profile."""
+    balance_usd = None
+    balance_tokens = None
+    if current_user.id != SERVICE_USER_ID:
+        balance = await balance_service.get_balance(db, current_user.id)
+        if balance is not None:
+            balance_usd = balance.balance_usd
+            balance_tokens = balance.balance_tokens
+
     return UserResponse(
         id=current_user.id,
         email=current_user.email,
@@ -131,4 +141,6 @@ async def get_me(
         background=current_user.background,
         created_at=None,
         is_admin=current_user.is_admin,
+        balance_usd=balance_usd,
+        balance_tokens=balance_tokens,
     )

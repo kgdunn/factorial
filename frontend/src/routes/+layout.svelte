@@ -70,6 +70,14 @@
             Admin
           </a>
         {/if}
+        {#if authState.user?.balance_usd != null}
+          <span
+            class="font-mono text-xs text-ink-faint"
+            title={`${authState.user.balance_tokens ?? 0} tokens`}
+          >
+            ${Number(authState.user.balance_usd).toFixed(2)}
+          </span>
+        {/if}
         <span class="font-mono text-xs text-ink-faint">
           {authState.user?.display_name || authState.user?.email || ''}
         </span>

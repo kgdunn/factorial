@@ -203,11 +203,46 @@ class TestMe:
     @pytest.mark.asyncio
     async def test_me_returns_user_profile(self, client):
         """GET /me returns the current user's profile (testing bypass)."""
-        resp = await client.get("/api/v1/auth/me")
+        mock_get = AsyncMock(return_value=None)
+        with patch("app.api.v1.endpoints.auth.balance_service.get_balance", mock_get):
+            resp = await client.get("/api/v1/auth/me")
         assert resp.status_code == 200
         data = resp.json()
         assert "id" in data
         assert "email" in data
+        assert "balance_usd" in data
+        assert "balance_tokens" in data
+
+    @pytest.mark.asyncio
+    async def test_me_includes_balance_when_present(self, client):
+        """GET /me surfaces balance_usd / balance_tokens from the balance service."""
+        from decimal import Decimal
+
+        class _FakeBalance:
+            def __init__(self, usd: Decimal, tokens: int) -> None:
+                self.balance_usd = usd
+                self.balance_tokens = tokens
+
+        mock_get = AsyncMock(return_value=_FakeBalance(Decimal("12.3400"), 4_200_000))
+        with patch("app.api.v1.endpoints.auth.balance_service.get_balance", mock_get):
+            resp = await client.get("/api/v1/auth/me")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert Decimal(data["balance_usd"]) == Decimal("12.3400")
+        assert data["balance_tokens"] == 4_200_000
+
+    @pytest.mark.asyncio
+    async def test_me_balance_null_when_no_row(self, client):
+        """GET /me returns null balance fields when no user_balances row exists."""
+        mock_get = AsyncMock(return_value=None)
+        with patch("app.api.v1.endpoints.auth.balance_service.get_balance", mock_get):
+            resp = await client.get("/api/v1/auth/me")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["balance_usd"] is None
+        assert data["balance_tokens"] is None
 
 
 # ---------------------------------------------------------------------------
