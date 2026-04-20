@@ -124,3 +124,29 @@ async def authenticate_user(
 async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
     """Fetch a user by primary key."""
     return await db.get(User, user_id)
+
+
+async def record_login_activity(
+    db: AsyncSession,
+    user: User,
+    *,
+    ip: str | None = None,
+    timezone: str | None = None,
+) -> None:
+    """Stamp the user row with sign-in metadata.
+
+    Best-effort: GeoIP errors never surface, and IP/timezone inputs are
+    applied only when non-empty so a refresh from a mobile client without
+    timezone doesn't blank out a previously-recorded value.
+    """
+    from app.services.geoip_service import lookup_country  # local import to avoid cycle
+
+    user.last_login_at = datetime.now(UTC)
+    if ip:
+        user.last_login_ip = ip
+        country = lookup_country(ip)
+        if country:
+            user.country = country
+    if timezone:
+        user.timezone = timezone
+    await db.flush()

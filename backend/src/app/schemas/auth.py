@@ -26,6 +26,7 @@ class LoginRequest(BaseModel):
 
     email: EmailStr
     password: str
+    timezone: str | None = Field(None, max_length=64)
 
 
 class TokenResponse(BaseModel):

@@ -41,14 +41,26 @@ export async function postRegister(
   return resp.json();
 }
 
+function browserTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function postLogin(
   email: string,
   password: string,
 ): Promise<TokenResponse> {
+  const payload: Record<string, string> = { email, password };
+  const tz = browserTimezone();
+  if (tz) payload.timezone = tz;
+
   const resp = await fetch('/api/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(payload),
   });
 
   if (resp.status === 401) throw new Error('Invalid email or password');

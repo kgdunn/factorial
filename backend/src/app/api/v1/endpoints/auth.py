@@ -25,9 +25,24 @@ from app.services.auth_service import (
     create_refresh_token,
     decode_token,
     get_user_by_id,
+    record_login_activity,
 )
 
 router = APIRouter()
+
+
+def _client_ip(request: Request) -> str | None:
+    """Return the caller's IP, honouring a single ``X-Forwarded-For`` hop.
+
+    We only trust the left-most XFF entry when a reverse proxy (Caddy/nginx)
+    is in front. In dev there is no proxy, so ``request.client.host`` is used.
+    """
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        first = fwd.split(",")[0].strip()
+        if first:
+            return first
+    return request.client.host if request.client else None
 
 
 @router.post("/register", status_code=status.HTTP_403_FORBIDDEN)
@@ -57,6 +72,8 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    await record_login_activity(db, user, ip=_client_ip(request), timezone=body.timezone)
 
     return TokenResponse(
         access_token=create_access_token(user.id, user.email),
@@ -93,6 +110,8 @@ async def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
+
+    await record_login_activity(db, user, ip=_client_ip(request))
 
     return TokenResponse(
         access_token=create_access_token(user.id, user.email),

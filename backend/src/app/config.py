@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     exports_chromium_path: str | None = None
     public_share_rate_limit: str = "30/minute"
 
+    # GeoIP
+    # Path to a MaxMind GeoLite2-Country.mmdb file. If unset or missing,
+    # country lookup is silently skipped — login flows continue normally.
+    geoip_country_db_path: str | None = None
+
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 

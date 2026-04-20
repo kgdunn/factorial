@@ -13,6 +13,7 @@ from app.config import settings
 from app.models.role import Role
 from app.models.signup_request import SignupRequest
 from app.models.user import User
+from app.models.user_balance import UserBalance
 from app.services import role_service
 from app.services.auth_service import hash_password
 
@@ -206,6 +207,9 @@ async def complete_registration(
         role_id=signup.role_id,
     )
     db.add(user)
+    await db.flush()  # assigns user.id so the balance FK resolves
+
+    db.add(UserBalance(user_id=user.id))
 
     signup.status = "registered"
     await db.flush()

@@ -225,6 +225,13 @@ FRONTEND_URL=http://<YOUR_SERVER_IP>
 # no port here. Swap to https://yourdomain.com once a domain is set up in Phase 10.
 # (Leave as http://localhost:8000 only for local dev without Caddy.)
 PUBLIC_API_URL=http://<YOUR_SERVER_IP>
+
+# GeoIP — optional. Path to a MaxMind GeoLite2-Country.mmdb file used to
+# resolve login IPs into ISO-3166 country codes for the admin Users panel.
+# Download from https://www.maxmind.com/ (free account required) and drop the
+# .mmdb file on the VPS. If this is empty or the file is missing, country
+# lookup is silently skipped — logins still work. Refresh the file monthly.
+GEOIP_COUNTRY_DB_PATH=/opt/agentic-doe/geoip/GeoLite2-Country.mmdb
 ```
 
 ### 4.4 — Lock down permissions
