@@ -19,7 +19,7 @@
       <h2 class="text-2xl font-bold sm:text-3xl">Run this analysis on your own data</h2>
       <p class="mt-2 text-sm text-white/90 sm:text-base">
         Agentic DOE lets you design, run, and share experiments like this one
-        — with an AI agent walking you through factors, response surfaces,
+        — with an agent walking you through factors, response surfaces,
         and statistical analysis.
       </p>
       <div class="mt-5 flex flex-wrap gap-3">

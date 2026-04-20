@@ -54,8 +54,8 @@ _redoc_url = None if settings.app_env == "production" else "/redoc"
 _openapi_url = None if settings.app_env == "production" else "/openapi.json"
 
 app = FastAPI(
-    title="Agentic Experimental Design & Analysis",
-    description="Backend API for AI agent-based Design of Experiments",
+    title="Factorial",
+    description="Backend API for conversational Design of Experiments",
     version="0.6.0",
     lifespan=lifespan,
     docs_url=_docs_url,

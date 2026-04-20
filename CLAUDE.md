@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Agentic Experimental Design & Analysis** is a monorepo containing the backend API (FastAPI) and frontend (SvelteKit) for an AI agent-based web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology.
+**Factorial** is a monorepo containing the backend API (FastAPI) and frontend (SvelteKit) for a conversational, LLM-assisted web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology.
 
 The actual statistical analysis tools live in a **separate package**: [`process-improve`](https://github.com/kgdunn/process-improve). That package provides PCA, PLS, factorial designs, response surface methodology, control charts, and more. The backend calls those tools via LangGraph agent orchestration (not yet implemented).
 

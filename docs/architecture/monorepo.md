@@ -5,7 +5,7 @@ This project uses a monorepo (`backend/` + `frontend/`) rather than separate rep
 ## Why monorepo over separate repos
 
 - **Single docker-compose** deploys both services. One `git pull && docker compose up --build` on the VPS.
-- **One git clone for full context** — AI agents (and humans) see the entire system without cross-repo coordination. No need to tell the agent "look here for the backend, look there for the frontend."
+- **One git clone for full context** — coding agents (and humans) see the entire system without cross-repo coordination. No need to tell the agent "look here for the backend, look there for the frontend."
 - **API contract co-evolution** — when a backend response schema changes, the frontend fetch call updates in the same PR. No version coordination dance.
 - **The project is small-team/solo** — separate repos add CI/versioning/deploy overhead without the team-boundary benefits that justify them at scale.
 

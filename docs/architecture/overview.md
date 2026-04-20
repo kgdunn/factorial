@@ -4,7 +4,7 @@ Cross-repo system architecture for the Agentic Experimental Design & Analysis pl
 
 ## Product Overview
 
-An AI agent-based web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology. The agent (powered by the Anthropic API) is the primary mode of interaction — it challenges user designs, advises on alternatives, and guides analysis.
+A conversational, LLM-assisted web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology. The agent (powered by the Anthropic API) is the primary mode of interaction — it challenges user designs, advises on alternatives, and guides analysis.
 
 ### Key Features
 

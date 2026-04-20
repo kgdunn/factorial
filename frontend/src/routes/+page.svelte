@@ -11,8 +11,8 @@
     Agentic <span class="text-primary">DOE</span>
   </h1>
   <p class="mt-4 max-w-md text-lg text-gray-500">
-    Design, run, and analyse experiments with an AI-powered assistant using
-    Design of Experiments methodology.
+    Design, run, and analyse experiments through a conversational agent,
+    using Design of Experiments methodology.
   </p>
   {#if authState.isAuthenticated}
     <a
