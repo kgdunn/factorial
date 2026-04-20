@@ -82,14 +82,14 @@ async def send_setup_email(to: str, url: str, is_first_time: bool) -> None:
     """Send a first-time setup link (``is_first_time=True``) or a password-reset link."""
     hours = settings.invite_token_expire_hours
     if is_first_time:
-        subject = "Set your Agentic DOE admin password"
-        heading = "Welcome to Agentic DOE"
+        subject = "Set your Factorial admin password"
+        heading = "Welcome to Factorial"
         intro = (
             "An admin account has been created for you. Click the link below to set "
             "your password and log in for the first time."
         )
     else:
-        subject = "Reset your Agentic DOE password"
+        subject = "Reset your Factorial password"
         heading = "Reset your password"
         intro = "We received a request to reset your password. Click the link below to choose a new one."
     html = f"""\
@@ -105,13 +105,13 @@ async def send_signup_confirmation(to: str, use_case: str) -> None:
     """Send the user a confirmation that their signup request was received."""
     html = f"""\
 <h2>We received your signup request</h2>
-<p>Thanks for your interest in Agentic DOE! We've received your request and
+<p>Thanks for your interest in Factorial! We've received your request and
 will review it shortly. You'll get another email once your account is approved.</p>
 <p><strong>Here's a copy of what you submitted:</strong></p>
 <blockquote>{use_case}</blockquote>
 """
     try:
-        await send_email(to, "Signup request received — Agentic DOE", html)
+        await send_email(to, "Signup request received — Factorial", html)
     except Exception:
         logger.exception("Failed to send signup confirmation to %s", to)
 
@@ -121,10 +121,10 @@ async def send_invite_email(to: str, invite_token: str) -> None:
     invite_url = f"{settings.frontend_url}/register/complete?token={invite_token}"
     hours = settings.invite_token_expire_hours
     html = f"""\
-<h2>You're invited to Agentic DOE!</h2>
+<h2>You're invited to Factorial!</h2>
 <p>Your signup request has been approved. Click the link below to create
 your account:</p>
 <p><a href="{invite_url}">Complete your registration</a></p>
 <p>This link expires in {hours} hours.</p>
 """
-    await send_email(to, "You're invited — Agentic DOE", html)
+    await send_email(to, "You're invited — Factorial", html)

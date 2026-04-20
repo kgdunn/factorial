@@ -175,7 +175,7 @@ async def _cmd_admin_event_log(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="app.cli", description="Agentic DOE admin CLI")
+    parser = argparse.ArgumentParser(prog="app.cli", description="Factorial admin CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_create = sub.add_parser("create-admin", help="Bootstrap an admin user and print a setup URL")
