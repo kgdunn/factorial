@@ -344,6 +344,17 @@ class TestChatEndpointMocked:
             response = await ac.post("/api/v1/chat", json={"message": ""})
         assert response.status_code == 422
 
+    @pytest.mark.asyncio
+    async def test_invalid_detail_level_returns_422(self):
+        """Unknown detail_level values are rejected by Pydantic validation."""
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post(
+                "/api/v1/chat",
+                json={"message": "hi", "detail_level": "bogus"},
+            )
+        assert response.status_code == 422
+
 
 # ---------------------------------------------------------------------------
 # No-op async session for mocked tests

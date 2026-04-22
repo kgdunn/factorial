@@ -47,6 +47,7 @@ async def chat(
             body.conversation_id,
             user_id=current_user.id,
             user_background=current_user.background,
+            detail_level=body.detail_level,
         )
     )
 

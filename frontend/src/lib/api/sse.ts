@@ -142,11 +142,12 @@ function dispatchSSEEvent(
 export function streamChat(
   message: string,
   conversationId: string | null,
+  detailLevel: 'beginner' | 'intermediate' | 'expert',
   callbacks: SSECallbacks,
 ): AbortController {
   const controller = new AbortController();
 
-  const body: Record<string, unknown> = { message };
+  const body: Record<string, unknown> = { message, detail_level: detailLevel };
   if (conversationId) {
     body.conversation_id = conversationId;
   }

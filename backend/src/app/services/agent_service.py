@@ -163,6 +163,7 @@ def _run_agent_loop(
     client: anthropic.Anthropic,
     model: str,
     turn_id: uuid.UUID,
+    system_prompt: str,
 ) -> dict[str, Any]:
     """Synchronous agent loop executed in a background thread.
 
@@ -183,7 +184,7 @@ def _run_agent_loop(
             with client.messages.stream(
                 model=model,
                 max_tokens=4096,
-                system=SYSTEM_PROMPT,
+                system=system_prompt,
                 messages=messages,
                 tools=tool_specs,
             ) as stream:
@@ -598,20 +599,43 @@ async def _create_experiment_from_design(
     return await create_experiment(db, design_output=design_output, conversation_id=conversation_id, user_id=user_id)
 
 
-def _build_system_prompt(user_background: str | None) -> str:
-    """Build the system prompt, optionally personalised with user background.
+_DETAIL_LEVEL_CLAUSES: dict[str, str] = {
+    "beginner": (
+        "Response style: the user is new to Design of Experiments. Explain "
+        "concepts in plain language, define technical terms the first time "
+        "you use them, walk through your reasoning step by step, and prefer "
+        "worked examples over abstract rules."
+    ),
+    "intermediate": "",
+    "expert": (
+        "Response style: the user is a DOE expert. Be concise. Skip basic "
+        "definitions and reasoning the user can reconstruct. Focus on the "
+        "result, non-obvious caveats, and any assumptions you had to make. "
+        "No preamble, no recap."
+    ),
+}
 
-    The background value is validated against an allowlist to prevent
-    prompt injection via the user profile field.
+
+def _build_system_prompt(user_background: str | None, detail_level: str = "intermediate") -> str:
+    """Build the system prompt, optionally personalised with user background and detail level.
+
+    The ``user_background`` value is validated against an allowlist to
+    prevent prompt injection via the user profile field. ``detail_level``
+    is looked up against a fixed set of clauses; any unknown value falls
+    back to ``intermediate`` (which appends nothing).
     """
+    prompt = SYSTEM_PROMPT
     if user_background and _ALLOWED_BACKGROUND_RE.match(user_background):
         bg_label = user_background.replace("_", " ")
-        return (
-            f"{SYSTEM_PROMPT}\n\n"
+        prompt = (
+            f"{prompt}\n\n"
             f"The user's background: {bg_label}. "
             f"Tailor your explanations, terminology, and examples to this domain."
         )
-    return SYSTEM_PROMPT
+    detail_clause = _DETAIL_LEVEL_CLAUSES.get(detail_level, "")
+    if detail_clause:
+        prompt = f"{prompt}\n\n{detail_clause}"
+    return prompt
 
 
 # ---------------------------------------------------------------------------
@@ -624,6 +648,7 @@ async def run_chat(
     conversation_id: uuid.UUID | None,
     user_id: uuid.UUID,
     user_background: str | None = None,
+    detail_level: str = "intermediate",
 ) -> AsyncGenerator[ServerSentEvent, None]:
     """Orchestrate a chat turn: load history, run agent loop, persist, stream SSE.
 
@@ -636,7 +661,7 @@ async def run_chat(
     events via the resume endpoint using the standard SSE
     ``Last-Event-ID`` header.
     """
-    system_prompt = _build_system_prompt(user_background)
+    system_prompt = _build_system_prompt(user_background, detail_level)
 
     # One ``turn_id`` per ``run_chat`` invocation. Shared across all
     # SSE events emitted during this turn so the resume endpoint can
@@ -734,6 +759,7 @@ async def run_chat(
                 client,
                 settings.anthropic_model,
                 turn_id,
+                system_prompt,
             )
 
             # 6. Stream SSE events from the queue — persist each one

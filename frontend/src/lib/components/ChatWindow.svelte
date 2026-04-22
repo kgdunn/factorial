@@ -3,6 +3,7 @@
   import { experimentsState } from '$lib/state/experiments.svelte';
   import MessageBubble from './MessageBubble.svelte';
   import Btn from './brand/Btn.svelte';
+  import DetailLevelControl from './brand/DetailLevelControl.svelte';
 
   let messageList: HTMLDivElement | undefined = $state();
   let inputText = $state('');
@@ -136,6 +137,13 @@
   {/if}
 
   <div class="border-t border-rule bg-paper px-9 pb-5 pt-4">
+    <div class="mx-auto mb-2 flex max-w-3xl justify-end">
+      <DetailLevelControl
+        value={chatState.detailLevel}
+        onchange={(level) => chatState.setDetailLevel(level)}
+        disabled={chatState.isStreaming}
+      />
+    </div>
     <div
       class="mx-auto flex max-w-3xl items-center gap-3 rounded-xl border border-rule-soft bg-paper-2 px-4 py-3.5"
     >
