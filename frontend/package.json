@@ -14,7 +14,7 @@
     "echarts": "^5.5.0",
     "echarts-gl": "^2.0.9",
     "html2canvas": "^1.4.1",
-    "marked": "^15.0.0"
+    "marked": "^18.0.2"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.0",
