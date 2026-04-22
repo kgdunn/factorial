@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "dompurify": "^3.4.1",
-    "echarts": "^5.5.0",
+    "echarts": "^6.0.0",
     "echarts-gl": "^2.0.9",
     "html2canvas": "^1.4.1",
     "marked": "^18.0.2"
