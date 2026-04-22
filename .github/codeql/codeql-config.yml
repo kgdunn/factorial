@@ -1,0 +1,12 @@
+name: "Factorial CodeQL config"
+
+queries:
+  - uses: security-and-quality
+
+paths-ignore:
+  # Alembic reads ``revision``, ``down_revision``, ``branch_labels`` and
+  # ``depends_on`` via module introspection. CodeQL can't follow that and
+  # flags every migration's header as unused-variable noise.
+  - backend/alembic/versions/**
+  # Design-reference HTML prototypes, not shipped code.
+  - frontend/**/prototypes/**

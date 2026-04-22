@@ -279,8 +279,6 @@ async def get_conversation_messages(
 
 def _parse_tool_content(content: str) -> dict[str, Any]:
     """Try to parse tool result content as JSON, falling back to a text dict."""
-    import json
-
     try:
         return json.loads(content)  # type: ignore[no-any-return]
     except (json.JSONDecodeError, TypeError):

@@ -13,8 +13,11 @@ from app.api.v1.router import api_v1_router
 from app.config import settings
 from app.db.session import engine
 from app.graph.neo4j_driver import neo4j_driver
+from app.logging_filters import install_log_injection_guard
 from app.services.anthropic_status import _llm_performance_snapshot_loop
 from app.services.exceptions import ToolExecutionError
+
+install_log_injection_guard()
 
 
 @asynccontextmanager
