@@ -69,6 +69,7 @@ def test_api_connection_error_is_recorded_and_emits_anthropic_unavailable():
         client=client,  # type: ignore[arg-type]
         model="claude-sonnet-4-6",
         turn_id=uuid.uuid4(),
+        system_prompt="test prompt",
     )
 
     events = _drain(q)
@@ -98,6 +99,7 @@ def test_auth_error_is_not_routed_through_tracker():
         client=client,  # type: ignore[arg-type]
         model="claude-sonnet-4-6",
         turn_id=uuid.uuid4(),
+        system_prompt="test prompt",
     )
 
     snap = status_tracker.snapshot()

@@ -31,6 +31,19 @@ const MAX_RESUME_ATTEMPTS = 3;
 /** Base delay in ms for exponential backoff between resume attempts. */
 const RESUME_BACKOFF_MS = 500;
 
+export type DetailLevel = 'beginner' | 'intermediate' | 'expert';
+
+const DETAIL_LEVELS: readonly DetailLevel[] = ['beginner', 'intermediate', 'expert'];
+const DETAIL_LEVEL_STORAGE_KEY = 'factorial:chat:detailLevel';
+
+function loadStoredDetailLevel(): DetailLevel {
+  if (typeof localStorage === 'undefined') return 'intermediate';
+  const stored = localStorage.getItem(DETAIL_LEVEL_STORAGE_KEY);
+  return (DETAIL_LEVELS as readonly string[]).includes(stored ?? '')
+    ? (stored as DetailLevel)
+    : 'intermediate';
+}
+
 class ChatState {
   messages = $state<ChatMessage[]>([]);
   isStreaming = $state(false);
@@ -38,6 +51,8 @@ class ChatState {
   error = $state<string | null>(null);
   /** User-visible "stream was cut short" flag; cleared on retry/new message. */
   wasInterrupted = $state(false);
+  /** Response verbosity preference, sent with every chat request. */
+  detailLevel = $state<DetailLevel>(loadStoredDetailLevel());
 
   private abortController: AbortController | null = null;
   private lastUserMessage: string | null = null;
@@ -78,8 +93,17 @@ class ChatState {
     this.abortController = streamChat(
       trimmed,
       this.conversationId,
+      this.detailLevel,
       this.buildCallbacks(),
     );
+  }
+
+  /** Update the detail level preference and persist it to localStorage. */
+  setDetailLevel(level: DetailLevel): void {
+    this.detailLevel = level;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(DETAIL_LEVEL_STORAGE_KEY, level);
+    }
   }
 
   /** Cancel an in-progress stream. */
