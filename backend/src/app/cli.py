@@ -34,7 +34,9 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.session import async_session_factory
+from app.logging_filters import install_log_injection_guard
 from app.services import admin_event_service, admin_service, setup_token_service
 from app.services.email_service import send_setup_email
 
@@ -231,10 +233,12 @@ async def _main_async(args: argparse.Namespace) -> int:
     if args.command == "create-admin":
         info = await _with_session(lambda s: _cmd_create_admin(s, args.email, args.name))
         print(f"Admin created: {info['email']}")
-        print(f"Setup link (valid 72h): {info['url']}")
-        if not args.no_email:
+        if not args.no_email and settings.smtp_host:
             with contextlib.suppress(Exception):
                 await send_setup_email(info["email"], info["url"], is_first_time=True)
+            print(f"Setup link emailed to {info['email']} (valid 72h).")
+        else:
+            print(f"Setup link (valid 72h): {info['url']}")
         return 0
 
     if args.command == "list-admins":
@@ -259,10 +263,12 @@ async def _main_async(args: argparse.Namespace) -> int:
 
     if args.command == "reset-password":
         info = await _with_session(lambda s: _cmd_reset_password(s, args.email))
-        print(f"Reset link for {info['email']} (valid 72h): {info['url']}")
-        if not args.no_email:
+        if not args.no_email and settings.smtp_host:
             with contextlib.suppress(Exception):
                 await send_setup_email(info["email"], info["url"], is_first_time=False)
+            print(f"Reset link emailed to {info['email']} (valid 72h).")
+        else:
+            print(f"Reset link for {info['email']} (valid 72h): {info['url']}")
         return 0
 
     if args.command == "admin-event":
@@ -322,6 +328,7 @@ async def _main_async(args: argparse.Namespace) -> int:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    install_log_injection_guard()
     args = _build_parser().parse_args()
     try:
         code = asyncio.run(_main_async(args))
