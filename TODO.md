@@ -65,19 +65,22 @@ context.
 
 ## Data bundle
 
-- [ ] Large `tool_output` objects (full design matrices, plot payloads) go
-      into `./fixtures/tool_output_<n>.json` in the zip — referenced only by
-      the expected-value comparison step, not by the runnable path. Keep
-      `analysis.py` slim.
+- [x] ~~Large `tool_output` objects (full design matrices, plot payloads) go
+      into `./fixtures/tool_output_<n>.json` in the zip~~ — retired in PR-2
+      (2026-04-23). The runnable path embeds `tool_input` via `json.dumps`
+      and regenerates `tool_output` on re-run, which is both simpler and a
+      stronger reproducibility check than a frozen-fixture diff.
 - [ ] Include a `check_outputs.py` in the bundle that re-runs the script
-      and diffs against `fixtures/` so users can verify numerical
-      reproducibility without reading the code.
+      and diffs against the agent's recorded `tool_output` so users can
+      verify numerical reproducibility without reading the code. (Would
+      need a separate "recorded outputs" JSON inside the bundle.)
 
 ## Docs
 
-- [ ] Add a short section under `docs/architecture/` describing the
+- [x] Add a short section under `docs/architecture/` describing the
       reproducibility guarantee, scope limits, and the TODO items above so
-      the scope is visible without digging through code.
+      the scope is visible without digging through code. (Landed as
+      `docs/architecture/reproducibility.md` in PR-2.)
 - [ ] Link to the generated bundle's README.md from the main docs so users
       can preview what they'll get before clicking download.
 
@@ -86,7 +89,7 @@ context.
 - [x] **PR-1 — MINOR bump.** `.py` export + `reproducible_export_service.py`
       + round-trip tests. Ships via the existing `GET /export?format=py`
       endpoint. No UI.
-- [ ] **PR-2 — MINOR bump.** `.ipynb`, `.md_code`, `.zip` bundle,
+- [x] **PR-2 — MINOR bump.** `.ipynb`, `.md_code`, `.zip` bundle,
       `data.xlsx`, `README.md`, `requirements.txt`. Add `nbformat`
       dependency. Bundle tests.
 - [ ] **PR-3 — PATCH bump.** `ExportMenu.svelte` entries + `types.ts` enum

@@ -1,0 +1,46 @@
+# Reproducible analysis: {{ experiment.name or "Untitled Experiment" }}
+
+| Field | Value |
+|-------|-------|
+| Experiment ID | `{{ experiment.id }}` |
+| Generated (UTC) | `{{ generated_at }}` |
+| process-improve | `{{ pi_version }}` |
+
+## Setup
+
+Install the pinned dependency and run each code block below in order:
+
+```bash
+pip install "process-improve=={{ pi_version }}"
+```
+
+```python
+from process_improve.tool_spec import execute_tool_call
+```
+
+## Steps
+
+{% for block in step_blocks %}
+### Step {{ block.index }} — `{{ block.tool_name }}`
+
+Captured from agent turn {{ block.agent_turn }}, call order {{ block.call_order }}.
+
+```python
+{{ block.code }}
+```
+
+{% endfor %}
+## Reproducibility scope
+
+Numeric tool outputs (coefficients, p-values, design matrix, VIF,
+aliasing, etc.) will be identical to what the factorial agent
+computed. Plot images may differ from the web UI because they are
+re-rendered locally (font / renderer drift).
+{% if warnings %}
+
+## Warnings captured at export
+
+{% for line in warnings %}
+- {{ line }}
+{% endfor %}
+{% endif %}
