@@ -214,6 +214,24 @@ This is load-bearing: short-circuiting the walkthrough defeats the whole point o
 - **Push regularly** — don't accumulate unpushed commits.
 - **Open a PR right away** — create a pull request as soon as the branch has its first commit. Don't wait until the work is "done."
 - **Always share the PR link** — after creating a pull request, always include the PR URL in your response to the user.
+- **Never push lock files.** Claude Code sessions must not stage, commit, or
+  push any dependency lock file. Lock-file updates are performed manually by
+  the repository owner.
+
+Specifically, do **not** include the following in any commit or PR opened from
+a Claude Code session:
+
+- `backend/uv.lock`
+- `frontend/package-lock.json`
+- `frontend/npm-shrinkwrap.json`
+- `frontend/yarn.lock`
+- `frontend/pnpm-lock.yaml`
+- any equivalent regenerated lock artifact
+
+If a command (e.g. `uv sync`, `npm install`) regenerates a lock file during a
+session, leave the file uncommitted. If it has already been staged, unstage it
+(`git restore --staged <lockfile>`) before committing. The user will refresh
+lock files manually outside of Claude Code sessions.
 
 ## Future Architecture (not yet implemented)
 
