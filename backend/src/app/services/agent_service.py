@@ -17,15 +17,12 @@ import json
 import logging
 import queue
 import re
-import time
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
 import anthropic
-import psutil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import ServerSentEvent
@@ -33,19 +30,21 @@ from sse_starlette.sse import ServerSentEvent
 from app.config import settings
 from app.db.session import async_session_factory
 from app.models.conversation import ChatEvent, Conversation, Message, ToolCall
-from app.services import pricing
-from app.services.anthropic_status import status_tracker
-from app.services.exceptions import ToolExecutionError
+from app.services.agent_loop import MAX_AGENT_TURNS, _run_agent_loop  # noqa: F401
 from app.services.experiment_service import (
     create_experiment,
     get_latest_experiment_for_conversation,
 )
-from app.services.tools import execute_tool_call, get_tool_specs
+from app.services.simulator_interception import RevealCounts, SimulatorStates
+from app.services.simulator_service import (
+    create_simulator_record,
+    list_simulators_for_conversation,
+    set_reveal_request_count,
+)
+from app.services.tools import get_tool_specs
 
 logger = logging.getLogger(__name__)
 
-# Safety limit: maximum agent loop iterations before forced stop.
-MAX_AGENT_TURNS = 10
 
 SYSTEM_PROMPT = """\
 You are an expert Design of Experiments (DOE) assistant helping scientists and \
@@ -61,14 +60,14 @@ Your expertise covers:
 When a user describes their experimental problem:
 1. Ask clarifying questions if the problem is under-specified.
 2. Recommend an appropriate design strategy with reasoning.
-3. Use the available tools to create designs or analyse results \u2014 do not \
+3. Use the available tools to create designs or analyse results — do not \
    fabricate numerical outputs yourself.
 4. Whenever ``generate_design`` succeeds, immediately call \
    ``evaluate_design`` on the same design before showing the matrix to \
    the user. Summarise the resolution, the confounding/aliasing of main \
    effects and 2-factor interactions, the D- and I-efficiency, and the \
    power per main effect for the assumed noise level. If the user has \
-   not supplied an expected residual standard deviation (\u03c3) or a \
+   not supplied an expected residual standard deviation (σ) or a \
    minimum practical effect size, ask for them before calling \
    ``evaluate_design``.
 5. Explain results in plain language, highlighting which factors matter \
@@ -76,6 +75,17 @@ When a user describes their experimental problem:
 
 Always explain your reasoning before calling a tool, and summarise the \
 results after receiving tool output.
+
+Fake-data simulators. If the user wants synthetic but realistic data \
+to plan or demonstrate an experiment, first propose a reasonable set \
+of factors (with ranges from your domain knowledge) and responses, \
+confirm with the user, and only then call ``create_simulator``. Use \
+``simulate_process`` to evaluate the simulator at specific settings; \
+outputs will differ slightly between identical calls (that is noise, \
+not a bug). Never paraphrase or guess the hidden model: if the user \
+asks to see it, call ``reveal_simulator``. The system will refuse the \
+first request with a confirmation prompt — surface it verbatim — and \
+reveal the model on the second request.
 """
 
 # Role slugs come from the admin-managed ``roles`` table. They're
@@ -149,215 +159,6 @@ async def _persist_chat_event(
             await db.commit()
     except Exception:
         logger.exception("Failed to persist chat_event seq=%s turn=%s", sequence, turn_id)
-
-
-# ---------------------------------------------------------------------------
-# Agent loop (runs in a thread)
-# ---------------------------------------------------------------------------
-
-
-def _run_agent_loop(
-    event_queue: queue.Queue[_QueueItem],
-    messages: list[dict[str, Any]],
-    tool_specs: list[dict[str, Any]],
-    client: anthropic.Anthropic,
-    model: str,
-    turn_id: uuid.UUID,
-    system_prompt: str,
-) -> dict[str, Any]:
-    """Synchronous agent loop executed in a background thread.
-
-    Pushes ``(event_name, data_dict)`` tuples to *event_queue*.
-    Returns a result dict with ``new_messages`` (Anthropic-format messages
-    appended during the loop) and ``tool_call_records`` (timing/audit data).
-    """
-    new_messages: list[dict[str, Any]] = []
-    tool_call_records: list[dict[str, Any]] = []
-    agent_turn = 0
-
-    try:
-        while agent_turn < MAX_AGENT_TURNS:
-            agent_turn += 1
-            turn_start = time.perf_counter()
-
-            # --- Stream the API call ---
-            with client.messages.stream(
-                model=model,
-                max_tokens=4096,
-                system=system_prompt,
-                messages=messages,
-                tools=tool_specs,
-            ) as stream:
-                text_parts: list[str] = []
-                for event in stream:
-                    if event.type == "content_block_delta" and hasattr(event.delta, "text"):
-                        event_queue.put(("token", {"text": event.delta.text}))
-                        text_parts.append(event.delta.text)
-
-                response = stream.get_final_message()
-
-            turn_latency_ms = int((time.perf_counter() - turn_start) * 1000)
-            status_tracker.record_success(turn_latency_ms)
-
-            # --- Collect response metadata ---
-            usage = response.usage
-            cost = pricing.calculate_cost(response.model, usage.input_tokens, usage.output_tokens)
-            response_meta = {
-                "input_tokens": usage.input_tokens,
-                "output_tokens": usage.output_tokens,
-                "stop_reason": response.stop_reason,
-                "model": response.model,
-                "latency_ms": turn_latency_ms,
-                **cost,
-            }
-
-            # --- Append assistant message (with all content blocks) ---
-            # Convert SDK content blocks to dicts for serialisation.
-            content_dicts = []
-            for block in response.content:
-                if block.type == "text":
-                    content_dicts.append({"type": "text", "text": block.text})
-                elif block.type == "tool_use":
-                    content_dicts.append(
-                        {
-                            "type": "tool_use",
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input,
-                        }
-                    )
-
-            assistant_msg = {"role": "assistant", "content": content_dicts, "_meta": response_meta}
-            messages.append({"role": "assistant", "content": response.content})
-            new_messages.append(assistant_msg)
-
-            # --- Check for tool calls ---
-            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
-
-            if response.stop_reason != "tool_use" or not tool_use_blocks:
-                event_queue.put(("done", {}))
-                break
-
-            # --- Execute each tool call ---
-            tool_results: list[dict[str, Any]] = []
-            for call_order, tool_block in enumerate(tool_use_blocks, start=1):
-                event_queue.put(("tool_start", {"tool": tool_block.name, "input": tool_block.input}))
-
-                input_bytes = len(json.dumps(tool_block.input, default=str).encode("utf-8"))
-                record: dict[str, Any] = {
-                    "tool_use_id": tool_block.id,
-                    "tool_name": tool_block.name,
-                    "tool_input": tool_block.input,
-                    "agent_turn": agent_turn,
-                    "call_order": call_order,
-                    "started_at": datetime.now(UTC),
-                    "turn_id": turn_id,
-                    "model_key": model,
-                    "input_bytes": input_bytes,
-                    "output_truncated": False,
-                }
-
-                t0 = time.perf_counter()
-                try:
-                    result = execute_tool_call(tool_block.name, tool_block.input)
-                    duration_ms = int((time.perf_counter() - t0) * 1000)
-                    output_bytes = len(json.dumps(result, default=str).encode("utf-8"))
-
-                    record.update(
-                        {
-                            "tool_output": result,
-                            "status": "success",
-                            "completed_at": datetime.now(UTC),
-                            "duration_ms": duration_ms,
-                            "output_bytes": output_bytes,
-                        }
-                    )
-
-                    event_queue.put(("tool_result", {"tool": tool_block.name, "output": result}))
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tool_block.id,
-                            "content": json.dumps(result),
-                        }
-                    )
-
-                except ToolExecutionError as exc:
-                    duration_ms = int((time.perf_counter() - t0) * 1000)
-                    record.update(
-                        {
-                            "status": "error",
-                            "error_message": exc.message,
-                            "completed_at": datetime.now(UTC),
-                            "duration_ms": duration_ms,
-                        }
-                    )
-
-                    event_queue.put(
-                        (
-                            "tool_result",
-                            {
-                                "tool": tool_block.name,
-                                "output": {"error": exc.message},
-                            },
-                        )
-                    )
-                    tool_results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tool_block.id,
-                            "content": json.dumps({"error": exc.message}),
-                            "is_error": True,
-                        }
-                    )
-
-                # Process-wide system snapshot at tool finish. NOT per-tool:
-                # in a multi-worker process the numbers describe the whole
-                # backend, not this tool's own cost. Best read as "what was
-                # the system doing when this tool ended".
-                try:
-                    proc = psutil.Process()
-                    record["rss_bytes"] = proc.memory_info().rss
-                    record["cpu_percent"] = proc.cpu_percent(interval=None)
-                except psutil.Error:
-                    # Telemetry must never break the agent loop.
-                    record["rss_bytes"] = None
-                    record["cpu_percent"] = None
-
-                tool_call_records.append(record)
-
-            # Append tool results as a user message and loop.
-            tool_result_msg = {"role": "user", "content": tool_results, "_is_tool_results": True}
-            messages.append({"role": "user", "content": tool_results})
-            new_messages.append(tool_result_msg)
-
-        else:
-            # Exhausted MAX_AGENT_TURNS
-            event_queue.put(("error", {"message": f"Agent loop exceeded {MAX_AGENT_TURNS} iterations."}))
-
-    except anthropic.AuthenticationError:
-        event_queue.put(("error", {"message": "Invalid Anthropic API key."}))
-    except anthropic.RateLimitError:
-        event_queue.put(("error", {"message": "Anthropic rate limit exceeded. Please retry later."}))
-    except (anthropic.APIConnectionError, anthropic.APITimeoutError, anthropic.InternalServerError) as exc:
-        status_tracker.record_error(type(exc).__name__)
-        event_queue.put(
-            (
-                "error",
-                {
-                    "kind": "anthropic_unavailable",
-                    "message": "The AI service is currently unavailable. Please try again in a moment.",
-                    "detail": str(exc),
-                },
-            )
-        )
-    except Exception:
-        logger.exception("Agent loop failed")
-        event_queue.put(("error", {"message": "Internal error in agent loop."}))
-    finally:
-        event_queue.put(_SENTINEL)
-
-    return {"new_messages": new_messages, "tool_call_records": tool_call_records}
 
 
 # ---------------------------------------------------------------------------
@@ -739,7 +540,16 @@ async def run_chat(
                 {"conversation_id": str(conversation.id), "turn_id": str(turn_id)},
             )
 
-            # 5. Launch agent loop in a thread.
+            # 5. Pre-load existing simulators for this conversation so their
+            #    hidden private_state can be injected into simulate_process /
+            #    reveal_simulator calls without an async round-trip from the
+            #    worker thread.
+            existing_sims = await list_simulators_for_conversation(db, conversation.id)
+            simulator_states: SimulatorStates = {sim.sim_id: dict(sim.private_state) for sim in existing_sims}
+            reveal_counts: RevealCounts = {sim.sim_id: int(sim.reveal_request_count) for sim in existing_sims}
+            newly_created_sims: list[dict[str, Any]] = []
+
+            # 6. Launch agent loop in a thread.
             event_queue: queue.Queue[_QueueItem] = queue.Queue()
             tool_specs = [{k: v for k, v in s.items() if k != "category"} for s in get_tool_specs()]
 
@@ -760,6 +570,10 @@ async def run_chat(
                 settings.anthropic_model,
                 turn_id,
                 system_prompt,
+                simulator_states,
+                reveal_counts,
+                newly_created_sims,
+                settings.simulator_reveal_force,
             )
 
             # 6. Stream SSE events from the queue — persist each one
@@ -798,6 +612,27 @@ async def run_chat(
                     if target is not None:
                         target.evaluation_data = rec["tool_output"]
 
+            # Persist newly-created simulators and refresh reveal counts on
+            # pre-existing ones so the double-confirm gate carries across
+            # turns in the same conversation.
+            created_sim_rows = []
+            for sim_info in newly_created_sims:
+                row = await create_simulator_record(
+                    db,
+                    sim_id=sim_info["sim_id"],
+                    public_summary=sim_info["public_summary"],
+                    private_state=sim_info["private_state"],
+                    user_id=user_id,
+                    conversation_id=conversation.id,
+                )
+                created_sim_rows.append(row)
+
+            existing_by_id = {sim.sim_id: sim for sim in existing_sims}
+            for sim_id, count in reveal_counts.items():
+                prev = existing_by_id.get(sim_id)
+                if prev is not None and int(prev.reveal_request_count) != count:
+                    await set_reveal_request_count(db, sim_id, user_id, count)
+
             # Update cached message count.
             msg_count = len(new_messages)
             for m in new_messages:
@@ -816,6 +651,16 @@ async def run_chat(
                         "experiment_id": str(experiment.id),
                         "name": experiment.name,
                         "design_type": experiment.design_type,
+                    },
+                )
+
+            # 11. Emit simulator_created events for newly persisted simulators.
+            for sim_row in created_sim_rows:
+                yield await emit(
+                    "simulator_created",
+                    {
+                        "simulator_id": str(sim_row.id),
+                        "sim_id": sim_row.sim_id,
                     },
                 )
 
