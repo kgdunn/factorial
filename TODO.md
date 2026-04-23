@@ -67,7 +67,7 @@ context.
 
 ## Phased delivery
 
-- [ ] **PR-1 — MINOR bump.** `.py` export + `reproducible_export_service.py`
+- [x] **PR-1 — MINOR bump.** `.py` export + `reproducible_export_service.py`
       + round-trip tests. Ships via the existing `GET /export?format=py`
       endpoint. No UI.
 - [ ] **PR-2 — MINOR bump.** `.ipynb`, `.md_code`, `.zip` bundle,
