@@ -80,12 +80,20 @@ async def export_public_experiment(
 
     Honours ``allow_results``: CSV and XLSX (which are primarily data
     payloads) return 403 when the owner disabled result sharing; PDF
-    and Markdown silently omit the response columns.
+    and Markdown silently omit the response columns.  The ``.py``
+    reproducible-code format is never exposed on public share links —
+    it carries the raw tool inputs and belongs behind auth.
     """
     resolved = await share_service.resolve_public_share(db, token)
     if not resolved:
         raise HTTPException(status_code=404, detail="Share not found")
     share, experiment = resolved
+
+    if format is ExportFormat.py:
+        raise HTTPException(
+            status_code=403,
+            detail="Reproducible code export is not available on public share links",
+        )
 
     if not share.allow_results and format in (ExportFormat.csv, ExportFormat.xlsx):
         raise HTTPException(
