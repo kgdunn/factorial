@@ -1,4 +1,4 @@
-.PHONY: help install debug deploy deploy-preflight deploy-up deploy-migrate \
+.PHONY: help install relock debug deploy deploy-preflight deploy-up deploy-migrate \
        deploy-bg deploy-bg-force rollback-bg \
        logs logs-app logs-frontend \
        clean lint format test migrate \
@@ -13,6 +13,7 @@ help:
 	@echo ""
 	@echo "Backend:"
 	@echo "  install            Install/update UV and backend dependencies"
+	@echo "  relock             Regenerate backend + frontend lock files and refresh .venv / node_modules"
 	@echo "  debug              Start uvicorn with hot-reload (port 8000)"
 	@echo "  lint               Check backend code with ruff"
 	@echo "  format             Auto-fix lint issues and format code"
@@ -52,6 +53,15 @@ install:
 	@echo "==> Installing/updating UV..."
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	cd backend && uv sync --all-extras
+
+relock:
+	@echo "==> Upgrading backend lock file..."
+	cd backend && uv lock --upgrade
+	@echo "==> Syncing backend .venv from new lock..."
+	cd backend && uv sync --all-extras
+	@echo "==> Upgrading frontend lock file..."
+	cd frontend && npm update
+	@echo "==> Relock complete."
 
 debug:
 	cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
