@@ -6,8 +6,8 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import bcrypt
 from jose import jwt
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,17 +18,22 @@ from app.models.user import User
 # Password hashing
 # ---------------------------------------------------------------------------
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt only looks at the first 72 bytes of input. passlib used to silently
+# truncate; bcrypt >= 4.1 raises. We truncate here to preserve bit-compatibility
+# with hashes already stored in the DB from the passlib era.
+_BCRYPT_MAX_BYTES = 72
 
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password with bcrypt."""
-    return _pwd_context.hash(password)
+    pw_bytes = password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+    return bcrypt.hashpw(pw_bytes, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against a bcrypt hash."""
-    return _pwd_context.verify(plain_password, hashed_password)
+    pw_bytes = plain_password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+    return bcrypt.checkpw(pw_bytes, hashed_password.encode("utf-8"))
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 [project]
 name = "agentic-doe"
-version = "0.18.0"
+version = "0.18.1"
 description = "Backend for conversational Design of Experiments analysis"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -20,8 +20,7 @@ dependencies = [
     "process-improve>=1.4.0",
     "slowapi>=0.1.9",
     "python-jose[cryptography]>=3.3.0",
-    "passlib>=1.7.4",
-    "bcrypt>=4.0,<6.0",
+    "bcrypt>=4.1,<6.0",
     "python-multipart>=0.0.9",
     "email-validator>=2.0",
     "aiosmtplib>=3.0.0",
