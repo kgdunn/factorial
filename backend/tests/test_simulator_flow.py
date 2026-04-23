@@ -27,34 +27,6 @@ import pytest
 from app.services import agent_service
 from app.services.agent_loop import _run_agent_loop
 from app.services.simulator_interception import post_dispatch, pre_dispatch
-from app.services.tools import get_tool_specs
-
-# ---------------------------------------------------------------------------
-# Integration-test skip guard.
-#
-# The three ``test_loop_*`` cases below dispatch real simulator tools
-# through ``execute_tool_call``, so they need the ``create_simulator``
-# family to be registered in the *installed* ``process-improve``.
-# Those tools live in process-improve's source tree but ship only in
-# versions past the one factorial currently pins.  Until a
-# process-improve release with ``simulation/`` reaches PyPI and the
-# backend bumps its dependency pin, skip these tests rather than let
-# CI stay red on an upstream gap.  When the registry grows the names
-# back, the skip silently evaporates and the tests run again.
-# ---------------------------------------------------------------------------
-
-_REQUIRED_SIMULATOR_TOOLS = frozenset({"create_simulator", "simulate_process", "reveal_simulator"})
-_registered_tool_names = {spec["name"] for spec in get_tool_specs() if "name" in spec}
-_simulator_tools_registered = _REQUIRED_SIMULATOR_TOOLS.issubset(_registered_tool_names)
-
-requires_simulator_tools = pytest.mark.skipif(
-    not _simulator_tools_registered,
-    reason=(
-        "Simulator tools are not registered in the installed process-improve "
-        "(expected in a future release that ships the simulation/ module). "
-        "Re-enabled automatically once the dependency is bumped."
-    ),
-)
 
 # ---------------------------------------------------------------------------
 # Anthropic stub: replay a scripted sequence of responses.
@@ -252,7 +224,6 @@ def default_outputs() -> list[dict]:
     return [{"name": "recovery"}]
 
 
-@requires_simulator_tools
 def test_loop_create_then_simulate_end_to_end(default_factors, default_outputs):
     """Claude calls create_simulator, then simulate_process on the same sim_id.
 
@@ -351,7 +322,6 @@ def test_loop_create_then_simulate_end_to_end(default_factors, default_outputs):
     assert any(name == "done" for name, _ in events)
 
 
-@requires_simulator_tools
 def test_loop_reveal_requires_two_asks(default_factors, default_outputs):
     """First reveal_simulator returns 'confirmation_needed'; second reveals."""
     create_call = _tool_use(
@@ -412,7 +382,6 @@ def test_loop_reveal_requires_two_asks(default_factors, default_outputs):
     assert "model" in reveal_records[1]["tool_output"]
 
 
-@requires_simulator_tools
 def test_loop_reveal_with_force_reveals_immediately(default_factors, default_outputs):
     """``force_reveal=True`` bypasses the double-confirm gate."""
     create_call = _tool_use(

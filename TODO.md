@@ -19,21 +19,17 @@ context.
       (no RNG at all) vs. which depend on a seed. The exporter should key
       off that list rather than hard-coding assumptions.
 
-## Pre-existing CI failures (unrelated to reproducible-code-export)
+## ~~Pre-existing CI failures (unrelated to reproducible-code-export)~~
 
-- [ ] `tests/test_simulator_flow.py::test_loop_create_then_simulate_end_to_end`,
-      `::test_loop_reveal_requires_two_asks`, and
-      `::test_loop_reveal_with_force_reveals_immediately` fail with
-      `KeyError: 'sim_id'` on `main` at `42f08b2` (verified 2026-04-23).
-      The scripted `_Dynamic.stream` stub in those tests parses the
-      `tool_result` content expecting a `sim_id` key, but the
-      `create_simulator` tool output under `process-improve==1.5.1`
-      (pinned in `uv.lock`) no longer returns that key. Either update
-      the test to read whatever key the newer tool emits, or adjust
-      the simulator tool's output schema upstream in `process-improve`
-      so the contract is restored. CI has been red on `main` because
-      of this — fix it on a dedicated branch, not piggybacked onto
-      unrelated feature PRs.
+- [x] ~~`tests/test_simulator_flow.py::test_loop_*` fail with
+      `KeyError: 'sim_id'`~~ — **resolved 2026-04-23**. Root cause was
+      that `process-improve==1.5.1` (the pinned version) didn't ship the
+      `simulation/` module, so `execute_tool_call("create_simulator", …)`
+      raised `ValueError: Unknown tool`, which became an `is_error`
+      tool_result with no `sim_id` key. PR #73 added a skip guard;
+      `process-improve 1.6.0` (released in `kgdunn/process-improve#103`)
+      now ships `simulation/`; this PR bumps the pin to `>=1.6.0` and
+      drops the skip guard. All three tests now run and pass.
 
 ## Factorial backend
 
