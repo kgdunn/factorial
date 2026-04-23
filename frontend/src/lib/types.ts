@@ -149,7 +149,20 @@ export interface VisualizeDoeOutput {
 // Shareable experiment links
 // ---------------------------------------------------------------------------
 
-export type ExportFormat = 'pdf' | 'xlsx' | 'csv' | 'md';
+// Mirrors ``ExportFormat`` in ``backend/src/app/schemas/exports.py``.
+// ``pdf`` / ``xlsx`` / ``csv`` / ``md`` are static report formats.
+// ``py`` / ``ipynb`` / ``md_code`` / ``zip`` are the reproducible-code
+// formats (zip is the full bundle with code + data + README); they
+// require owner auth — the public share API refuses them with 403.
+export type ExportFormat =
+  | 'pdf'
+  | 'xlsx'
+  | 'csv'
+  | 'md'
+  | 'py'
+  | 'ipynb'
+  | 'md_code'
+  | 'zip';
 
 export interface ShareLink {
   id: string;

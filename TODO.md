@@ -88,5 +88,5 @@ context.
 - [x] **PR-2 — MINOR bump.** `.ipynb`, `.md_code`, `.zip` bundle,
       `data.xlsx`, `README.md`, `requirements.txt`. Add `nbformat`
       dependency. Bundle tests.
-- [ ] **PR-3 — PATCH bump.** `ExportMenu.svelte` entries + `types.ts` enum
+- [x] **PR-3 — PATCH bump.** `ExportMenu.svelte` entries + `types.ts` enum
       sync + section split. No backend change.
