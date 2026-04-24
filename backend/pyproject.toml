@@ -1,6 +1,6 @@
 [project]
 name = "agentic-doe"
-version = "0.20.1"
+version = "0.20.2"
 description = "Backend for conversational Design of Experiments analysis"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
