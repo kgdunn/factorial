@@ -43,14 +43,14 @@
   }
 </script>
 
-<div class="flex h-screen flex-col bg-paper">
+<div class="flex h-dvh flex-col bg-paper">
   <SystemBanner />
   <!-- Navigation bar -->
-  <nav class="flex items-center justify-between border-b border-rule bg-paper-2 px-6 py-3">
+  <nav class="flex flex-wrap items-center justify-between gap-y-2 border-b border-rule bg-paper-2 px-4 py-3 sm:px-6">
     <a href="/" class="flex items-center" aria-label="factori.al home">
       <Wordmark size={22} />
     </a>
-    <div class="flex items-center gap-6">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-6">
       {#if authState.isAuthenticated}
         <a
           href="/chat"
@@ -74,13 +74,13 @@
         {/if}
         {#if authState.user?.balance_usd != null}
           <span
-            class="font-mono text-xs text-ink-faint"
+            class="hidden font-mono text-xs text-ink-faint sm:inline"
             title={`${authState.user.balance_tokens ?? 0} tokens`}
           >
             ${Number(authState.user.balance_usd).toFixed(2)}
           </span>
         {/if}
-        <span class="font-mono text-xs text-ink-faint">
+        <span class="hidden font-mono text-xs text-ink-faint sm:inline">
           {authState.user?.display_name || authState.user?.email || ''}
         </span>
         <button

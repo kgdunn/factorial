@@ -18,8 +18,8 @@
 </script>
 
 <div class="border-b border-rule bg-paper">
-  <div class="flex items-center gap-5 px-9 py-5">
-    <div class="flex-1">
+  <div class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:gap-5 sm:px-9 sm:py-5">
+    <div class="min-w-0 flex-1">
       {#if breadcrumb}
         <div
           class="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint"
@@ -28,19 +28,19 @@
         </div>
       {/if}
       <div
-        class="font-serif italic text-[32px] leading-[1.1] text-ink tracking-[-0.01em]"
+        class="font-serif italic text-[26px] leading-[1.1] text-ink tracking-[-0.01em] sm:text-[32px]"
       >
         {@render title()}
       </div>
     </div>
     {#if actions}
-      <div class="flex gap-2.5">
+      <div class="flex flex-wrap gap-2.5 sm:flex-nowrap sm:justify-end">
         {@render actions()}
       </div>
     {/if}
   </div>
   {#if tabs && tabs.length}
-    <div class="flex gap-1 px-7">
+    <div class="flex gap-1 overflow-x-auto px-5 sm:px-7">
       {#each tabs as tab (tab.label)}
         <button
           type="button"

@@ -59,7 +59,7 @@
 <div class="flex h-full flex-col bg-paper">
   <div
     bind:this={messageList}
-    class="flex-1 overflow-y-auto px-9 py-7"
+    class="flex-1 overflow-y-auto px-5 py-5 sm:px-9 sm:py-7"
     onscroll={handleScroll}
   >
     {#if chatState.messages.length === 0}
@@ -68,7 +68,7 @@
           <div class="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-faint">
             new experiment · blank
           </div>
-          <h2 class="mt-2 font-serif italic text-[40px] leading-tight text-ink">
+          <h2 class="mt-2 font-serif italic text-[28px] leading-tight text-ink sm:text-[34px] md:text-[40px]">
             Describe the process you want to <em class="text-clay-ink">understand</em>.
           </h2>
           <p class="mt-4 font-sans text-[15px] leading-relaxed text-ink-soft">
@@ -106,7 +106,7 @@
 
   {#if experimentsState.lastCreated}
     <div
-      class="mx-9 mb-2 flex items-center justify-between rounded-xl border border-[#EBD9C7] bg-clay-tint px-4 py-2.5 font-sans text-sm text-clay-ink"
+      class="mx-5 mb-2 flex items-center justify-between rounded-xl border border-[#EBD9C7] bg-clay-tint px-4 py-2.5 font-sans text-sm text-clay-ink sm:mx-9"
     >
       <span>
         <span class="font-mono text-[10px] uppercase tracking-[0.18em]">experiment saved</span>
@@ -129,14 +129,14 @@
 
   {#if chatState.error}
     <div
-      class="mx-9 mb-2 flex items-center justify-between rounded-xl border border-[color:var(--color-negative)]/30 bg-[#FBECE8] px-4 py-2.5 font-sans text-sm text-[color:var(--color-negative)]"
+      class="mx-5 mb-2 flex items-center justify-between rounded-xl border border-[color:var(--color-negative)]/30 bg-[#FBECE8] px-4 py-2.5 font-sans text-sm text-[color:var(--color-negative)] sm:mx-9"
     >
       <span>{chatState.error}</span>
       <Btn variant="clay" size="sm" onclick={() => chatState.retryLastMessage()}>Retry</Btn>
     </div>
   {/if}
 
-  <div class="border-t border-rule bg-paper px-9 pb-5 pt-4">
+  <div class="border-t border-rule bg-paper px-5 pt-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-9">
     <div class="mx-auto mb-2 flex max-w-3xl justify-end">
       <DetailLevelControl
         value={chatState.detailLevel}

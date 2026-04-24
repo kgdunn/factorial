@@ -90,3 +90,10 @@ context.
       dependency. Bundle tests.
 - [x] **PR-3 — PATCH bump.** `ExportMenu.svelte` entries + `types.ts` enum
       sync + section split. No backend change.
+
+## Frontend — mobile
+
+- [ ] Replace the top-nav link group in `frontend/src/routes/+layout.svelte`
+      with a hamburger drawer on small screens. The current patch hides the
+      balance span and the display-name span under `sm:` so the row fits on
+      a phone; a drawer would surface them again without wrapping.
