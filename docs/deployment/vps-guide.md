@@ -356,8 +356,9 @@ docker compose exec app uv run alembic upgrade head
 
 ```bash
 curl -s http://localhost:8000/api/v1/health | python3 -m json.tool
-curl -s http://localhost:8000/docs | head -20
 ```
+
+> The Swagger UI (`/docs`), ReDoc (`/redoc`), and raw OpenAPI schema (`/openapi.json`) are intentionally **disabled in production** — they're gated on `APP_ENV != "production"` in [`backend/src/app/main.py`](https://github.com/kgdunn/agentic-doe/blob/main/backend/src/app/main.py). Expect a 404 from those paths on a correctly-configured deploy. Run the app locally with `APP_ENV=development` if you want to browse the schema.
 
 ### 8.2 — Databases
 
@@ -409,16 +410,12 @@ This is an HTTP-only setup for use **before you have a domain**. Caddy will list
 
 Use `127.0.0.1` (not `localhost`) in the `reverse_proxy` targets. Caddy resolves `localhost` to IPv6 `::1` first, but the Docker services bind to IPv4 `127.0.0.1` only — the mismatch produces `dial tcp [::1]:3000: connect: connection refused` errors in the Caddy log.
 
+Only `/api/*` is proxied to the backend. Swagger / ReDoc / `openapi.json` are disabled in production by the FastAPI app itself (see Phase 8.1), so there is no reason to route those paths through Caddy.
+
 ```bash
 sudo tee /etc/caddy/Caddyfile << 'EOF'
 :80 {
     handle /api/* {
-        reverse_proxy 127.0.0.1:8000
-    }
-    handle /docs* {
-        reverse_proxy 127.0.0.1:8000
-    }
-    handle /openapi.json {
         reverse_proxy 127.0.0.1:8000
     }
     handle {
@@ -455,8 +452,9 @@ docker compose restart app
 From your browser:
 
 - **Frontend:** `http://<YOUR_SERVER_IP>/`
-- **API docs:** `http://<YOUR_SERVER_IP>/docs`
 - **API health:** `http://<YOUR_SERVER_IP>/api/v1/health`
+
+(`/docs` is intentionally disabled in production — see the note in Phase 8.1.)
 
 ---
 
@@ -480,12 +478,6 @@ Replace `yourdomain.com` with your real domain (e.g. `factori.al`). As soon as C
 sudo tee /etc/caddy/Caddyfile << 'EOF'
 yourdomain.com {
     handle /api/* {
-        reverse_proxy 127.0.0.1:8000
-    }
-    handle /docs* {
-        reverse_proxy 127.0.0.1:8000
-    }
-    handle /openapi.json {
         reverse_proxy 127.0.0.1:8000
     }
     handle {
@@ -632,12 +624,6 @@ Replace the Caddyfile from Phase 9.2 / 10.2 with this version, which imports the
 sudo tee /etc/caddy/Caddyfile << 'EOF'
 yourdomain.com {
     handle /api/* {
-        import /etc/caddy/active_backend.caddy
-    }
-    handle /docs* {
-        import /etc/caddy/active_backend.caddy
-    }
-    handle /openapi.json {
         import /etc/caddy/active_backend.caddy
     }
     handle {
