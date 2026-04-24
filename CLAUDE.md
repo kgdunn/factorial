@@ -245,6 +245,28 @@ session, leave the file uncommitted. If it has already been staged, unstage it
 (`git restore --staged <lockfile>`) before committing. The user will refresh
 lock files manually outside of Claude Code sessions.
 
+### TODO.md upkeep
+
+`TODO.md` at the repo root is the living backlog of cross-cutting follow-ups
+(determinism gaps, deferred schema work, reproducibility caveats, roadmap
+items). It is **mandatory** to check `TODO.md` at the start of every Claude
+Code session and to update it as part of every PR:
+
+- **Before starting work**: read `TODO.md`. If the task the user is asking
+  for is already listed there, note the match in your first response. If
+  your task will touch anything a TODO item depends on, flag it.
+- **During a PR**: if you land work that resolves or partially resolves a
+  TODO item, tick the checkbox in the same commit (and add a commit message
+  line referencing the item).
+- **During a PR**: if you discover a new cross-cutting follow-up that is
+  out of scope for the current PR, add it to `TODO.md` in the same commit
+  rather than burying it in a code comment or PR description.
+- **Never silently delete** TODO items. If an item is obsolete, strike it
+  through with `~~...~~` and add a one-line note saying why and when it
+  was retired.
+- `TODO.md` is the source of truth for follow-ups. GitHub issues can mirror
+  items but the repo file must stay in sync.
+
 ## Future Architecture (not yet implemented)
 
 ### Agent Orchestration

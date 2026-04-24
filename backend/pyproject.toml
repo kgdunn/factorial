@@ -1,6 +1,7 @@
 [project]
 name = "factorial"
-version = "0.18.2"
+version = "0.20.2"
+
 description = "Backend for conversational Design of Experiments analysis"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
@@ -17,7 +18,7 @@ dependencies = [
     "httpx>=0.28.0",
     "anthropic>=0.42.0",
     "sse-starlette>=2.0.0",
-    "process-improve>=1.4.0",
+    "process-improve>=1.6.0",
     "slowapi>=0.1.9",
     "python-jose[cryptography]>=3.3.0",
     "bcrypt>=4.1,<6.0",
@@ -26,6 +27,7 @@ dependencies = [
     "aiosmtplib>=3.0.0",
     "openpyxl>=3.1.0",
     "jinja2>=3.1.0",
+    "nbformat>=5.10",
     "weasyprint>=63.0",
     "playwright>=1.49.0",
     "psutil>=6.0.0",

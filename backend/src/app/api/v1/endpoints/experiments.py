@@ -27,7 +27,12 @@ from app.schemas.shares import (
     ShareLinkListResponse,
     ShareLinkResponse,
 )
-from app.services import experiment_service, export_service, share_service
+from app.services import (
+    experiment_service,
+    export_service,
+    reproducible_export_service,
+    share_service,
+)
 from app.services.exceptions import ToolExecutionError
 from app.services.tools import execute_tool_call_async
 
@@ -45,6 +50,7 @@ async def _build_export_bytes(
     *,
     include_results: bool,
     share_url: str | None,
+    db: AsyncSession | None = None,
 ) -> bytes:
     if fmt is ExportFormat.csv:
         return export_service.build_csv(exp, include_results=include_results)
@@ -54,7 +60,26 @@ async def _build_export_bytes(
         return export_service.build_markdown(exp, include_results=include_results, share_url=share_url)
     if fmt is ExportFormat.pdf:
         return await export_service.build_pdf(exp, include_results=include_results, share_url=share_url)
+    if fmt in _REPRODUCIBLE_FORMATS:
+        # All reproducible formats read captured tool calls from the DB;
+        # callers must supply a session.  The public-share route explicitly
+        # refuses these formats before dispatching here.
+        if db is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Reproducible code export is not available on this route",
+            )
+        return await _REPRODUCIBLE_BUILDERS[fmt](db, exp)
     raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}")
+
+
+_REPRODUCIBLE_BUILDERS = {
+    ExportFormat.py: reproducible_export_service.build_python_script,
+    ExportFormat.ipynb: reproducible_export_service.build_notebook,
+    ExportFormat.md_code: reproducible_export_service.build_literate_markdown,
+    ExportFormat.zip: reproducible_export_service.build_reproducible_bundle,
+}
+_REPRODUCIBLE_FORMATS = frozenset(_REPRODUCIBLE_BUILDERS)
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +289,10 @@ async def evaluate_experiment(
 @router.get("/{experiment_id}/export")
 async def export_experiment(
     experiment_id: uuid.UUID,
-    format: ExportFormat = Query(..., description="Output format: pdf, xlsx, csv, md"),
+    format: ExportFormat = Query(
+        ...,
+        description="Output format: pdf, xlsx, csv, md, py, ipynb, md_code, zip",
+    ),
     acknowledge_share: bool = Query(
         False,
         description=(
@@ -286,7 +314,7 @@ async def export_experiment(
             detail=("PDF exports embed analysis plots as images; call again with acknowledge_share=true to confirm."),
         )
 
-    payload = await _build_export_bytes(exp, format, include_results=True, share_url=None)
+    payload = await _build_export_bytes(exp, format, include_results=True, share_url=None, db=db)
     filename = f"{_slugify(exp.name)}.{EXPORT_EXTENSIONS[format]}"
     return Response(
         content=payload,

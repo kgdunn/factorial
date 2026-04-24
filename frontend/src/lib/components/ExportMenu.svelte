@@ -14,11 +14,32 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
 
-  const FORMATS: { format: ExportFormat; label: string; hint: string }[] = [
-    { format: 'pdf', label: 'PDF', hint: 'Printable report with embedded plots' },
-    { format: 'xlsx', label: 'Excel (.xlsx)', hint: 'Design + responses as spreadsheet tabs' },
-    { format: 'csv', label: 'CSV', hint: 'Design matrix + responses, single sheet' },
-    { format: 'md', label: 'Markdown', hint: 'Plain-text report for docs' },
+  // ``ext`` is the filename extension; it usually matches ``format`` but
+  // differs for ``md_code`` (the backend emits ``.md``, not ``.md_code``).
+  interface FormatEntry {
+    format: ExportFormat;
+    label: string;
+    hint: string;
+    ext: string;
+  }
+
+  const REPORT_FORMATS: FormatEntry[] = [
+    { format: 'pdf', label: 'PDF', hint: 'Printable report with embedded plots', ext: 'pdf' },
+    { format: 'xlsx', label: 'Excel (.xlsx)', hint: 'Design + responses as spreadsheet tabs', ext: 'xlsx' },
+    { format: 'csv', label: 'CSV', hint: 'Design matrix + responses, single sheet', ext: 'csv' },
+    { format: 'md', label: 'Markdown', hint: 'Plain-text report for docs', ext: 'md' },
+  ];
+
+  // Reproducible code formats — replay the recorded tool calls locally
+  // via ``process_improve.tool_spec.execute_tool_call``.  The ``zip``
+  // bundle is the primary deliverable (code + data + pinned deps +
+  // README); the other three are individual artifacts for users who
+  // want just one file.  See ``docs/architecture/reproducibility.md``.
+  const CODE_FORMATS: FormatEntry[] = [
+    { format: 'zip', label: 'Reproducible bundle (.zip)', hint: 'Code + data + README — re-run locally', ext: 'zip' },
+    { format: 'ipynb', label: 'Jupyter notebook', hint: 'Narrative + runnable cells', ext: 'ipynb' },
+    { format: 'py', label: 'Python script', hint: 'execute_tool_call() per step', ext: 'py' },
+    { format: 'md_code', label: 'Literate Markdown', hint: 'Prose with fenced code blocks', ext: 'md' },
   ];
 
   function slug(name: string): string {
@@ -30,6 +51,10 @@
     );
   }
 
+  function extFor(format: ExportFormat): string {
+    return [...REPORT_FORMATS, ...CODE_FORMATS].find((f) => f.format === format)?.ext ?? format;
+  }
+
   async function download(format: ExportFormat, acknowledgeShare = false) {
     busy = true;
     error = null;
@@ -38,7 +63,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${slug(experimentName)}.${format}`;
+      a.download = `${slug(experimentName)}.${extFor(format)}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -79,10 +104,31 @@
   {#if open}
     <div
       role="menu"
-      class="absolute right-0 z-10 mt-1 w-64 origin-top-right rounded-md border border-gray-200 bg-white shadow-lg"
+      class="absolute right-0 z-10 mt-1 w-72 origin-top-right rounded-md border border-gray-200 bg-white shadow-lg"
     >
+      <div class="border-b border-gray-100 px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+        Report
+      </div>
       <ul class="py-1">
-        {#each FORMATS as fmt (fmt.format)}
+        {#each REPORT_FORMATS as fmt (fmt.format)}
+          <li>
+            <button
+              type="button"
+              class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              disabled={busy}
+              onclick={() => handlePick(fmt.format)}
+            >
+              <div class="font-medium">{fmt.label}</div>
+              <div class="text-xs text-gray-500">{fmt.hint}</div>
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <div class="border-t border-gray-100 px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+        Reproducible code
+      </div>
+      <ul class="py-1">
+        {#each CODE_FORMATS as fmt (fmt.format)}
           <li>
             <button
               type="button"

@@ -23,6 +23,19 @@ from app.services import share_service
 
 router = APIRouter()
 
+# Reproducible-code formats are never exposed on public share links —
+# they carry raw tool inputs (and, for ``zip``, the full data file +
+# README).  Keeping this set colocated with the share route so reviewers
+# see the policy without having to cross-reference the enum.
+_PUBLIC_SHARE_REFUSED_FORMATS = frozenset(
+    {
+        ExportFormat.py,
+        ExportFormat.ipynb,
+        ExportFormat.md_code,
+        ExportFormat.zip,
+    }
+)
+
 
 async def _owner_display_name(db: AsyncSession, user_id) -> str | None:
     if user_id is None:
@@ -80,12 +93,21 @@ async def export_public_experiment(
 
     Honours ``allow_results``: CSV and XLSX (which are primarily data
     payloads) return 403 when the owner disabled result sharing; PDF
-    and Markdown silently omit the response columns.
+    and Markdown silently omit the response columns.  The reproducible
+    code formats (``py`` / ``ipynb`` / ``md_code`` / ``zip``) are never
+    exposed on public share links — they carry raw tool inputs and
+    belong behind auth.
     """
     resolved = await share_service.resolve_public_share(db, token)
     if not resolved:
         raise HTTPException(status_code=404, detail="Share not found")
     share, experiment = resolved
+
+    if format in _PUBLIC_SHARE_REFUSED_FORMATS:
+        raise HTTPException(
+            status_code=403,
+            detail="Reproducible code export is not available on public share links",
+        )
 
     if not share.allow_results and format in (ExportFormat.csv, ExportFormat.xlsx):
         raise HTTPException(
