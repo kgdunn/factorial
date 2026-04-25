@@ -8,6 +8,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
+from app.admin import mount_admin
 from app.api.rate_limit import limiter
 from app.api.v1.router import api_v1_router
 from app.config import settings
@@ -79,6 +80,11 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(api_v1_router, prefix="/api/v1")
+
+# Read-only DB browser at /admin. Auth is a separate session cookie
+# (sqladmin installs its own SessionMiddleware); only users with
+# ``is_admin = true`` can sign in.
+mount_admin(app)
 
 
 @app.exception_handler(ToolExecutionError)
