@@ -43,3 +43,7 @@ node_modules/
 
 # MkDocs build output
 site/
+
+# Per-turn chat timing log (TIMING_LOG_PATH default)
+logs/
+backend/logs/
