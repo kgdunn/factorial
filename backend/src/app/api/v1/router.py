@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     shares_public,
     signup,
     tools,
+    uploads,
 )
 from app.config import settings
 
@@ -58,6 +59,12 @@ api_v1_router.include_router(designs.router, prefix="/designs", tags=["designs"]
 api_v1_router.include_router(chat.router, prefix="/chat", tags=["chat"], dependencies=_auth)
 api_v1_router.include_router(tools.router, prefix="/tools", tags=["tools"], dependencies=_auth)
 api_v1_router.include_router(experiments.router, prefix="/experiments", tags=["experiments"], dependencies=_auth)
+api_v1_router.include_router(
+    uploads.router,
+    prefix="/experiments/uploads",
+    tags=["experiment-uploads"],
+    dependencies=_auth,
+)
 api_v1_router.include_router(feedback.router, prefix="/feedback", tags=["feedback"], dependencies=_auth)
 
 # Hosted MCP endpoint: off by default. Mounts only when operators
