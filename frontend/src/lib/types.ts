@@ -134,6 +134,53 @@ export interface ResultsResponse {
 }
 
 // ---------------------------------------------------------------------------
+// DOE upload flow (mirrors ``backend/src/app/schemas/uploads.py``)
+// ---------------------------------------------------------------------------
+
+export type FactorType = 'continuous' | 'categorical' | 'mixture';
+export type ResponseGoal = 'maximize' | 'minimize' | 'target';
+export type UploadOrientation = 'rows' | 'columns';
+export type UploadStatus = 'needs_clarification' | 'parsed';
+
+export interface UploadFactor {
+  name: string;
+  type: FactorType;
+  low: number | null;
+  high: number | null;
+  levels: unknown[] | null;
+  units: string | null;
+}
+
+export interface UploadResponseSpec {
+  name: string;
+  goal: ResponseGoal | null;
+  units: string | null;
+}
+
+export interface ClarifyingQuestion {
+  id: string;
+  question: string;
+  options: string[] | null;
+  column_ref: string | null;
+}
+
+export interface ParsedDesignPayload {
+  orientation: UploadOrientation;
+  factors: UploadFactor[];
+  responses: UploadResponseSpec[];
+  design_actual: Record<string, unknown>[];
+  results_data: Record<string, unknown>[];
+}
+
+export interface UploadParseResponse {
+  upload_id: string;
+  status: UploadStatus;
+  parsed: ParsedDesignPayload | null;
+  questions: ClarifyingQuestion[] | null;
+  raw_preview: unknown[][];
+}
+
+// ---------------------------------------------------------------------------
 // visualize_doe output shape
 // ---------------------------------------------------------------------------
 
