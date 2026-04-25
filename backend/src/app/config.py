@@ -150,7 +150,7 @@ class Settings(BaseSettings):
     @property
     def cors_allow_headers(self) -> list[str]:
         if self.app_env == "production":
-            return ["Content-Type", "X-API-Key", "Authorization"]
+            return ["Content-Type", "X-API-Key", "X-CSRF-Token"]
         return ["*"]
 
     def validate_production_secrets(self) -> None:
@@ -166,8 +166,7 @@ class Settings(BaseSettings):
 
         if self.api_secret_key in _INSECURE_DEFAULTS:
             problems.append(
-                "API_SECRET_KEY is empty or uses a default value (also used "
-                "to sign sqladmin sessions)",
+                "API_SECRET_KEY is empty or uses a default value (also used to sign sqladmin sessions)",
             )
         if self.postgres_password in _INSECURE_DEFAULTS:
             problems.append("POSTGRES_PASSWORD uses a weak default value")
