@@ -5,8 +5,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from ipaddress import IPv4Address, IPv6Address
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.signup import RoleSummary
 
@@ -48,6 +49,17 @@ class AdminUserDetail(BaseModel):
     disclaimers_accepted: bool | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("last_login_ip", mode="before")
+    @classmethod
+    def _ip_to_str(cls, v: object) -> object:
+        # Postgres `INET` columns deserialise as ipaddress.IPv4Address /
+        # IPv6Address; normalise to canonical text so the field stays a JSON
+        # string. SQLite tests already see plain strings, so this is a no-op
+        # there.
+        if isinstance(v, (IPv4Address, IPv6Address)):
+            return str(v)
+        return v
 
 
 class AdminUserListResponse(BaseModel):
