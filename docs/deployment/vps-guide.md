@@ -195,16 +195,15 @@ NEO4J_PASSWORD=<PASTE_SECOND_GENERATED_PASSWORD>
 # Anthropic — required for the agent loop
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Security — API key for endpoint authentication
+# Security — API key for endpoint authentication. Also used as the
+# signing secret for the read-only sqladmin session cookie.
 # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 API_SECRET_KEY=<GENERATE_A_RANDOM_SECRET>
 
-# JWT Authentication
-# Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
-JWT_SECRET_KEY=<GENERATE_A_RANDOM_SECRET>
-JWT_ALGORITHM=HS256
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
-JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+# Browser sessions are opaque DB rows; redeploys are session-transparent.
+# Defaults work for most deployments — uncomment to override.
+# COOKIE_SESSION_IDLE_DAYS=30
+# COOKIE_SESSION_ABSOLUTE_DAYS=180
 
 # CORS / public origins — your server IP for now. All three must match the
 # origin the browser actually hits. Swap to https://yourdomain.com in Phase 10.

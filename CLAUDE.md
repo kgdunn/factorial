@@ -204,21 +204,21 @@ This is load-bearing: short-circuiting the walkthrough defeats the whole point o
 
 ## Authentication
 
-**Dual auth**: JWT Bearer tokens (browser users) + API key (machine-to-machine).
+**Dual auth**: opaque session cookie (browser users) + API key (machine-to-machine).
 
-- **JWT**: `python-jose` + `passlib` + `bcrypt`. Short-lived access tokens (30 min) + refresh tokens (7 days).
-- **API key**: `X-API-Key` header with HMAC comparison. Retained for service-to-service calls.
-- **`require_auth` dependency** (`api/deps.py`): tries JWT first, falls back to API key, returns an `AuthUser` dataclass.
+- **Sessions**: rows in the `sessions` table keyed by 32 random bytes (the cookie value). Idle expiry = 30 d, absolute = 180 d, both configurable. There is no signing key in the loop; redeploys are session-transparent.
+- **CSRF**: double-submit. A non-httpOnly `factorial_csrf` cookie is mirrored into an `X-CSRF-Token` header on POST/PUT/PATCH/DELETE; backend rejects mismatches via the `require_csrf` dependency.
+- **API key**: `X-API-Key` header with HMAC comparison. Retained for service-to-service calls. Skips CSRF (header-based credential).
+- **`require_auth` dependency** (`api/deps.py`): tries the cookie first, falls back to API key, returns an `AuthUser` dataclass with `session_id` / `family_id` set for cookie-authed callers.
 - **User model** (`models/user.py`): email, password_hash, display_name, role_id (FK → roles), is_admin, is_active.
-- **User scoping**: `user_id` FK on `conversations` and `experiments` is **NOT NULL**; ownership is checked unconditionally (no service-account bypass). Admin-only routes gate on `is_admin` via `require_admin`.
-- **System prompt personalization**: the user's role slug (from the `roles` table, surfaced on `AuthUser.background`) is appended to the agent system prompt.
-- **Auth endpoints**: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`.
-- **Frontend**: JWT stored in localStorage, injected via `authFetch()` wrapper. Auth guard redirects to `/login`.
-- **Testing bypass**: `APP_ENV=testing` returns a synthetic test user; no real auth needed in tests.
+- **User scoping**: `user_id` FK on `conversations` and `experiments` is **NOT NULL**; ownership is checked unconditionally. Admin-only routes gate on `is_admin` via `require_admin`.
+- **Auth endpoints**: `POST /auth/login`, `POST /auth/logout`, `POST /auth/logout-all`, `GET /auth/me`, `GET /auth/sessions`, `DELETE /auth/sessions/{public_id}`. `POST /auth/refresh` does not exist (sessions are sliding).
+- **Frontend**: nothing in localStorage. Identity comes from `GET /auth/me` at boot; on a 401 anywhere, `authFetch` opens an inline `ReauthModal` and replays the request after sign-in. 5xx is surfaced to the caller (no logout-on-deploy-blip).
+- **SSE**: `Depends(require_auth)` resolves once before the StreamingResponse opens. Server-side revocation does NOT interrupt an in-flight stream — it takes effect on the next connection. `/profile` UI copy notes this.
+- **Testing bypass**: `tests/conftest.py` overrides `require_auth`, `require_api_key`, and `require_csrf` with synthetic stubs; tests never see real auth.
 
 ### Future auth graduation
-- AWS Cognito or Supabase Auth when social login/MFA needed
-- Redis for token blacklisting (currently stateless)
+- AWS Cognito or Supabase Auth if social login or MFA is needed
 
 ## Git & PR Workflow
 
