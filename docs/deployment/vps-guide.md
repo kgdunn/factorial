@@ -232,7 +232,24 @@ INVITE_TOKEN_EXPIRE_HOURS=72
 # .mmdb file on the VPS. If this is empty or the file is missing, country
 # lookup is silently skipped — logins still work. Refresh the file monthly.
 GEOIP_COUNTRY_DB_PATH=/opt/factorial/geoip/GeoLite2-Country.mmdb
+
+# Per-turn chat timing log (engineering debugging only). The backend
+# writes one JSON Lines record per phase / API call / tool call /
+# turn_total to this path so chat latency can be diagnosed with
+# ``tail -f`` and ``jq``. Leave empty to disable. The container path
+# below is mounted from ``./logs`` on the host (see docker-compose.yml).
+TIMING_LOG_PATH=/app/logs/timing.jsonl
+TIMING_LOG_MAX_BYTES=10485760
+TIMING_LOG_BACKUP_COUNT=5
 ```
+
+> The timing log lives on a host-mounted volume (`./logs:/app/logs` in
+> `docker-compose.yml`). Tail it from the host with
+> `tail -f logs/timing.jsonl | jq .` and rotate via the values above —
+> a stdlib `RotatingFileHandler` keeps `TIMING_LOG_BACKUP_COUNT` files
+> capped at `TIMING_LOG_MAX_BYTES` each. Ship to a log aggregator (e.g.
+> Vector, Loki, OpenTelemetry collector) by tailing this file rather
+> than scraping app stdout.
 
 > Admins are **not** configured via env vars anymore — `users.is_admin` in the database is the source of truth. See Phase 11 for how to bootstrap the first admin.
 

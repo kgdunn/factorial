@@ -23,6 +23,7 @@ from app.services.anthropic_status import status_tracker
 from app.services.exceptions import ToolExecutionError
 from app.services.simulator_interception import RevealCounts, SimulatorStates, post_dispatch, pre_dispatch
 from app.services.tools import execute_tool_call, is_local_tool
+from app.services.turn_timing import TurnTimer
 
 # Pretty labels for the ``phase`` event's ``label`` field. Keep in sync
 # with the Anthropic-format tool specs returned by ``get_tool_specs``.
@@ -65,6 +66,7 @@ def _run_agent_loop(  # noqa: PLR0913
     reveal_counts: RevealCounts | None = None,
     newly_created_sims: list[dict[str, Any]] | None = None,
     force_reveal: bool = False,
+    timer: TurnTimer | None = None,
 ) -> dict[str, Any]:
     """Synchronous agent loop executed in a background thread.
 
@@ -103,6 +105,7 @@ def _run_agent_loop(  # noqa: PLR0913
             )
 
             # --- Stream the API call ---
+            ttft_ms: int | None = None
             with client.messages.stream(
                 model=model,
                 max_tokens=4096,
@@ -115,6 +118,7 @@ def _run_agent_loop(  # noqa: PLR0913
                 for event in stream:
                     if event.type == "content_block_delta" and hasattr(event.delta, "text"):
                         if not streaming_phase_emitted:
+                            ttft_ms = int((time.perf_counter() - turn_start) * 1000)
                             event_queue.put(
                                 (
                                     "phase",
@@ -129,6 +133,18 @@ def _run_agent_loop(  # noqa: PLR0913
 
             turn_latency_ms = int((time.perf_counter() - turn_start) * 1000)
             status_tracker.record_success(turn_latency_ms)
+
+            if timer is not None:
+                timer.event(
+                    "api_call",
+                    agent_turn=agent_turn,
+                    model=response.model,
+                    ttft_ms=ttft_ms,
+                    total_ms=turn_latency_ms,
+                    input_tokens=response.usage.input_tokens,
+                    output_tokens=response.usage.output_tokens,
+                    stop_reason=response.stop_reason,
+                )
 
             # --- Collect response metadata ---
             usage = response.usage
@@ -304,6 +320,17 @@ def _run_agent_loop(  # noqa: PLR0913
                     record["cpu_percent"] = None
 
                 tool_call_records.append(record)
+                if timer is not None and not is_local_tool(tool_block.name):
+                    timer.event(
+                        "tool",
+                        agent_turn=agent_turn,
+                        call_order=call_order,
+                        tool=tool_block.name,
+                        status=record.get("status"),
+                        duration_ms=record.get("duration_ms"),
+                        input_bytes=record.get("input_bytes"),
+                        output_bytes=record.get("output_bytes"),
+                    )
 
             # Append tool results as a user message and loop.
             tool_result_msg = {"role": "user", "content": tool_results, "_is_tool_results": True}

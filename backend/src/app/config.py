@@ -137,6 +137,15 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
+    # Per-turn timing instrumentation. JSON Lines file written via a
+    # rotating handler so we can grep / jq the chat path without touching
+    # the main app log. Set ``timing_log_path`` to an empty string to
+    # disable. The dev default is repo-relative; in production mount a
+    # volume and point this at e.g. /var/log/factorial/timing.jsonl.
+    timing_log_path: str = "logs/timing.jsonl"
+    timing_log_max_bytes: int = 10 * 1024 * 1024
+    timing_log_backup_count: int = 5
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]

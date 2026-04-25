@@ -9,6 +9,10 @@ services:
     environment:
       - POSTGRES_HOST=postgres
       - NEO4J_URI=bolt://neo4j:7687
+    volumes:
+      # Per-turn chat timing log (TIMING_LOG_PATH). Mounted so the file
+      # survives container restarts and can be tailed from the host.
+      - ./logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,6 +61,8 @@ services:
       - POSTGRES_HOST=postgres
       - NEO4J_URI=bolt://neo4j:7687
       - APP_COLOR=blue
+    volumes:
+      - ./logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -83,6 +89,8 @@ services:
       - POSTGRES_HOST=postgres
       - NEO4J_URI=bolt://neo4j:7687
       - APP_COLOR=green
+    volumes:
+      - ./logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
