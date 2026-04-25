@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth_cookies import clear_session_cookies, set_session_cookies
+from app.api.csrf import require_csrf
 from app.api.deps import SERVICE_USER_ID, AuthUser, require_auth
 from app.api.rate_limit import limiter
 from app.config import settings
@@ -99,7 +100,11 @@ async def login(
     )
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
 async def logout(
     response: Response,
     current_user: AuthUser = Depends(require_auth),
@@ -113,7 +118,11 @@ async def logout(
     return response
 
 
-@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
 async def logout_all(
     response: Response,
     current_user: AuthUser = Depends(require_auth),
@@ -180,7 +189,11 @@ async def list_sessions(
     ]
 
 
-@router.delete("/sessions/{public_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/sessions/{public_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_csrf)],
+)
 async def revoke_session(
     public_id: uuid.UUID,
     current_user: AuthUser = Depends(require_auth),

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth_cookies import set_session_cookies
+from app.api.csrf import require_csrf
 from app.api.deps import AuthUser, require_admin
 from app.api.rate_limit import limiter
 from app.config import settings
@@ -159,7 +160,11 @@ async def admin_list_signups(
     )
 
 
-@router.post("/admin/{signup_id}/approve", status_code=status.HTTP_200_OK)
+@router.post(
+    "/admin/{signup_id}/approve",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_csrf)],
+)
 async def admin_approve_signup(
     signup_id: uuid.UUID,
     body: SignupApproveRequest | None = None,
@@ -185,7 +190,11 @@ async def admin_approve_signup(
     return {"message": f"Signup approved and invite sent to {signup.email}"}
 
 
-@router.post("/admin/{signup_id}/reject", status_code=status.HTTP_200_OK)
+@router.post(
+    "/admin/{signup_id}/reject",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_csrf)],
+)
 async def admin_reject_signup(
     signup_id: uuid.UUID,
     body: SignupRejectRequest | None = None,
