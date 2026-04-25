@@ -1,7 +1,7 @@
 """remove built-in 'other' role
 
-Revision ID: 0002
-Revises: 0001
+Revision ID: 0010
+Revises: 0009
 Create Date: 2026-04-25
 
 The signup form has its own hardcoded \"Other (describe below)\" option
@@ -16,8 +16,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0002"
-down_revision: str | None = "0001"
+revision: str = "0010"
+down_revision: str | None = "0009"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
