@@ -1,6 +1,6 @@
 <script lang="ts">
   import BaseChart from './BaseChart.svelte';
-  import DesignMatrix from './DesignMatrix.svelte';
+  import ExperimentDataTable from './ExperimentDataTable.svelte';
 
   interface Props {
     evaluation: Record<string, unknown>;
@@ -159,7 +159,7 @@
   {#each tables as table}
     <div class="mb-6">
       <h3 class="mb-2 text-sm font-semibold text-gray-700">{table.title}</h3>
-      <DesignMatrix matrix={table.rows} columns={table.columns} />
+      <ExperimentDataTable rows={table.rows} factorColumns={table.columns} />
     </div>
   {/each}
 

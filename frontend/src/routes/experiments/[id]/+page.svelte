@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { experimentsState } from '$lib/state/experiments.svelte';
-  import DesignMatrix from '$lib/components/DesignMatrix.svelte';
+  import ExperimentDataTable from '$lib/components/ExperimentDataTable.svelte';
   import DesignEvaluationBlock from '$lib/components/DesignEvaluationBlock.svelte';
   import ExportMenu from '$lib/components/ExportMenu.svelte';
   import ResultsEntryForm from '$lib/components/ResultsEntryForm.svelte';
@@ -242,7 +242,10 @@
               </button>
             {/if}
           </div>
-          <DesignMatrix matrix={designMatrix()} />
+          <ExperimentDataTable
+            rows={designMatrix()}
+            factorColumns={designMatrix().length > 0 ? Object.keys(designMatrix()[0]) : []}
+          />
         </div>
       {/if}
 
