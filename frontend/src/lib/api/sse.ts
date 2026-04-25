@@ -18,7 +18,7 @@ import type { ExperimentCreatedEvent, SSECallbacks } from '$lib/types';
 // SSE line parser
 // ---------------------------------------------------------------------------
 
-async function parseSSEStream(
+export async function parseSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onEvent: (event: string, data: string, id: string | null) => void,
   signal: AbortSignal,
