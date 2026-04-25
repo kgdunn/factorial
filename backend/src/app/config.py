@@ -164,10 +164,11 @@ class Settings(BaseSettings):
 
         problems: list[str] = []
 
-        if self.jwt_secret_key in _INSECURE_DEFAULTS:
-            problems.append("JWT_SECRET_KEY is empty or uses a default value")
         if self.api_secret_key in _INSECURE_DEFAULTS:
-            problems.append("API_SECRET_KEY is empty or uses a default value")
+            problems.append(
+                "API_SECRET_KEY is empty or uses a default value (also used "
+                "to sign sqladmin sessions)",
+            )
         if self.postgres_password in _INSECURE_DEFAULTS:
             problems.append("POSTGRES_PASSWORD uses a weak default value")
         if self.neo4j_password in _INSECURE_DEFAULTS:
