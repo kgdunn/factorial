@@ -98,4 +98,39 @@ describe('parseSSEStream', () => {
     expect(onEvent).toHaveBeenCalledTimes(1);
     expect(onEvent).toHaveBeenCalledWith('token', '{"text":"real"}', null);
   });
+
+  it('parses plan / plan_update / phase events alongside token events', async () => {
+    // The new live-progress events ride the same wire format as everything
+    // else; the parser is content-agnostic so this is really an "is the
+    // dispatcher receiving the right strings" test.
+    const wire =
+      'event: phase\r\ndata: {"phase":"thinking","turn":1}\r\n\r\n' +
+      'event: plan\r\ndata: {"plan_id":"abc","steps":["S1","S2"]}\r\n\r\n' +
+      'event: plan_update\r\ndata: {"plan_id":"abc","updates":[{"step_index":0,"status":"completed"}]}\r\n\r\n';
+
+    const events = await collect([wire]);
+
+    expect(events.map((e) => e.event)).toEqual(['phase', 'plan', 'plan_update']);
+    expect(JSON.parse(events[1].data)).toEqual({ plan_id: 'abc', steps: ['S1', 'S2'] });
+    expect(JSON.parse(events[2].data)).toMatchObject({
+      plan_id: 'abc',
+      updates: [{ step_index: 0, status: 'completed' }],
+    });
+  });
+
+  it('reassembles a plan_update payload split mid-JSON', async () => {
+    // Resume replay can deliver large plan_update batches over multiple
+    // chunks; the carry-over path needs to handle a split inside data:.
+    const events = await collect([
+      'event: plan_update\r\ndata: {"plan_id":"abc","upd',
+      'ates":[{"step_index":1,"status":"in_progress"}]}\r\n\r\n',
+    ]);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].event).toBe('plan_update');
+    expect(JSON.parse(events[0].data)).toEqual({
+      plan_id: 'abc',
+      updates: [{ step_index: 1, status: 'in_progress' }],
+    });
+  });
 });
