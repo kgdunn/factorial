@@ -20,10 +20,66 @@ export type SSEEventType =
   | 'token'
   | 'tool_start'
   | 'tool_result'
+  | 'plan'
+  | 'plan_update'
+  | 'phase'
   | 'done'
   | 'error'
   | 'experiment_created'
   | 'interrupted';
+
+// ---------------------------------------------------------------------------
+// Live-plan / phase types
+// ---------------------------------------------------------------------------
+
+export type PlanStepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
+
+export interface PlanStep {
+  text: string;
+  status: PlanStepStatus;
+  note?: string;
+  /** ms timestamp captured client-side when the step first transitions to in_progress. */
+  startedAt?: number;
+  /** ms timestamp captured client-side when the step transitions to completed/skipped. */
+  completedAt?: number;
+}
+
+export type PhaseName = 'thinking' | 'streaming' | 'calling_tool' | 'finalizing';
+
+export interface PhaseState {
+  phase: PhaseName;
+  label?: string;
+  tool?: string;
+  turn?: number;
+  maxTurns?: number;
+  /** ms timestamp captured client-side when this phase started. */
+  startedAt: number;
+}
+
+/** Wire payloads — match backend agent_loop.py emissions. */
+export interface PlanEvent {
+  plan_id: string;
+  steps: string[];
+}
+
+export interface PlanUpdateItem {
+  step_index: number;
+  status: PlanStepStatus;
+  note?: string;
+}
+
+export interface PlanUpdateEvent {
+  plan_id: string;
+  updates: PlanUpdateItem[];
+}
+
+export interface PhaseEvent {
+  phase: PhaseName;
+  label?: string;
+  tool?: string;
+  turn?: number;
+  max_turns?: number;
+}
 
 // ---------------------------------------------------------------------------
 // Content blocks (discriminated union)
@@ -50,7 +106,13 @@ export interface ToolResultBlock {
   isError: boolean;
 }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+export interface PlanBlock {
+  type: 'plan';
+  planId: string;
+  steps: PlanStep[];
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | PlanBlock;
 
 // ---------------------------------------------------------------------------
 // Chat message
@@ -75,6 +137,12 @@ export interface SSECallbacks {
   onDone(): void;
   onError(message: string): void;
   onExperimentCreated?(data: ExperimentCreatedEvent): void;
+  /** A new plan was recorded by the agent (record_plan tool call). */
+  onPlan?(event: PlanEvent): void;
+  /** One or more plan steps changed status (update_plan tool call). */
+  onPlanUpdate?(event: PlanUpdateEvent): void;
+  /** Coarse activity phase changed (always-on, independent of plan). */
+  onPhase?(event: PhaseEvent): void;
   /**
    * Emitted by the resume endpoint when the underlying turn did not
    * reach a terminal (done/error) event — e.g. the server container

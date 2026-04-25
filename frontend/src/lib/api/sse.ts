@@ -12,7 +12,13 @@
 
 import { authState } from '$lib/state/auth.svelte';
 import { anthropicStatus } from '$lib/state/anthropicStatus.svelte';
-import type { ExperimentCreatedEvent, SSECallbacks } from '$lib/types';
+import type {
+  ExperimentCreatedEvent,
+  PhaseEvent,
+  PlanEvent,
+  PlanUpdateEvent,
+  SSECallbacks,
+} from '$lib/types';
 
 // ---------------------------------------------------------------------------
 // SSE line parser
@@ -125,6 +131,15 @@ function dispatchSSEEvent(
       break;
     case 'experiment_created':
       callbacks.onExperimentCreated?.(data as unknown as ExperimentCreatedEvent);
+      break;
+    case 'plan':
+      callbacks.onPlan?.(data as unknown as PlanEvent);
+      break;
+    case 'plan_update':
+      callbacks.onPlanUpdate?.(data as unknown as PlanUpdateEvent);
+      break;
+    case 'phase':
+      callbacks.onPhase?.(data as unknown as PhaseEvent);
       break;
     case 'interrupted':
       callbacks.onInterrupted?.(
