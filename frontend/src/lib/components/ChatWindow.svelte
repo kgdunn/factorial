@@ -6,6 +6,7 @@
   import DetailLevelControl from './brand/DetailLevelControl.svelte';
 
   let messageList: HTMLDivElement | undefined = $state();
+  let inputEl: HTMLTextAreaElement | undefined = $state();
   let inputText = $state('');
   let userScrolledUp = $state(false);
 
@@ -60,11 +61,35 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key !== 'Enter') return;
+    // Ctrl/Cmd + Enter inserts a newline. Manual splice instead of relying
+    // on the browser default — Chrome and Firefox don't insert one for
+    // Ctrl+Enter inside a <textarea>, only for Shift+Enter and bare Enter.
+    if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      handleSend();
+      const ta = e.currentTarget as HTMLTextAreaElement;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      inputText = inputText.slice(0, start) + '\n' + inputText.slice(end);
+      requestAnimationFrame(() => {
+        ta.selectionStart = ta.selectionEnd = start + 1;
+      });
+      return;
     }
+    // Shift+Enter falls through to the textarea's default newline behavior.
+    if (e.shiftKey) return;
+    e.preventDefault();
+    handleSend();
   }
+
+  // Auto-grow the textarea up to its CSS max-height; re-runs on every
+  // keystroke (including paste) and after handleSend clears the field.
+  $effect(() => {
+    void inputText;
+    if (!inputEl) return;
+    inputEl.style.height = 'auto';
+    inputEl.style.height = `${inputEl.scrollHeight}px`;
+  });
 
   function handlePromptClick(prompt: string) {
     inputText = prompt;
@@ -161,15 +186,17 @@
       />
     </div>
     <div
-      class="mx-auto flex max-w-3xl items-center gap-3 rounded-xl border border-rule-soft bg-paper-2 px-4 py-3.5"
+      class="mx-auto flex max-w-3xl items-end gap-3 rounded-xl border border-rule-soft bg-paper-2 px-4 py-3.5"
     >
-      <input
-        class="flex-1 border-none bg-transparent font-sans text-sm text-ink outline-none placeholder:text-ink-faint"
-        placeholder="Ask the agent anything — &quot;why resolution V?&quot;, &quot;swap to Box-Behnken&quot;, &quot;add a block for shift&quot;"
+      <textarea
+        bind:this={inputEl}
+        rows={1}
+        class="flex-1 resize-none border-none bg-transparent p-0 font-sans text-sm leading-6 text-ink outline-none placeholder:text-ink-faint max-h-40"
+        placeholder="Ask the agent anything — &quot;why resolution V?&quot;, &quot;swap to Box-Behnken&quot;, &quot;add a block for shift&quot;. Ctrl+Enter for a new line."
         bind:value={inputText}
         onkeydown={handleKeydown}
         disabled={chatState.isStreaming}
-      />
+      ></textarea>
       {#if chatState.isStreaming}
         <Btn variant="ghost" size="sm" onclick={() => chatState.cancelStream()}>Cancel</Btn>
       {:else}
