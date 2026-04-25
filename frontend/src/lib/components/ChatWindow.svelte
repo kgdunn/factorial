@@ -78,6 +78,12 @@
     }
     // Shift+Enter falls through to the textarea's default newline behavior.
     if (e.shiftKey) return;
+    // Touch-primary devices (phones, most tablets): the on-screen Enter key
+    // is the only way to break a line, so let it insert a newline instead
+    // of submitting. The Send button stays available for submit.
+    if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) {
+      return;
+    }
     e.preventDefault();
     handleSend();
   }
@@ -191,8 +197,8 @@
       <textarea
         bind:this={inputEl}
         rows={1}
-        class="flex-1 resize-none border-none bg-transparent p-0 font-sans text-sm leading-6 text-ink outline-none placeholder:text-ink-faint max-h-40"
-        placeholder="Ask the agent anything — &quot;why resolution V?&quot;, &quot;swap to Box-Behnken&quot;, &quot;add a block for shift&quot;. Ctrl+Enter for a new line."
+        class="flex-1 resize-none border-none bg-transparent p-0 font-sans text-sm leading-6 text-ink outline-none placeholder:text-ink-faint max-h-[50dvh]"
+        placeholder="Ask the agent anything — &quot;why resolution V?&quot;, &quot;swap to Box-Behnken&quot;, &quot;add a block for shift&quot;."
         bind:value={inputText}
         onkeydown={handleKeydown}
         disabled={chatState.isStreaming}
