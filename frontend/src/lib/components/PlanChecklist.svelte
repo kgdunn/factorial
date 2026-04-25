@@ -172,7 +172,7 @@
   {#if isStreaming && currentPhase}
     <div
       class="mt-2 flex items-center gap-2 border-t border-stone-200/70 pt-2 text-xs
-             text-stone-500 dark:border-stone-700/60 dark:text-stone-400"
+             text-stone-700 dark:border-stone-700/60 dark:text-stone-300"
     >
       <span
         class="inline-block h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-amber-500"
