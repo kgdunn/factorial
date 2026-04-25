@@ -12,6 +12,12 @@ import { resumeChatStream, streamChat } from '$lib/api/sse';
 import type {
   ChatMessage,
   ContentBlock,
+  PhaseEvent,
+  PhaseState,
+  PlanBlock,
+  PlanEvent,
+  PlanStep,
+  PlanUpdateEvent,
   SSECallbacks,
   ToolUseBlock,
 } from '$lib/types';
@@ -53,6 +59,13 @@ class ChatState {
   wasInterrupted = $state(false);
   /** Response verbosity preference, sent with every chat request. */
   detailLevel = $state<DetailLevel>(loadStoredDetailLevel());
+  /**
+   * Current coarse activity phase (thinking / streaming / calling_tool /
+   * finalizing). Cleared when the turn completes. Used by the
+   * PlanChecklist footer to show "what is the agent doing right now"
+   * even when no plan was recorded.
+   */
+  currentPhase = $state<PhaseState | null>(null);
 
   private abortController: AbortController | null = null;
   private lastUserMessage: string | null = null;
@@ -71,6 +84,7 @@ class ChatState {
     this.wasInterrupted = false;
     this.lastEventId = null;
     this.resumeAttempts = 0;
+    this.currentPhase = null;
 
     // Add user message
     this.messages.push({
@@ -113,6 +127,7 @@ class ChatState {
       this.abortController = null;
     }
     this.isStreaming = false;
+    this.currentPhase = null;
   }
 
   /** Retry the last user message. */
@@ -145,6 +160,7 @@ class ChatState {
     this.lastUserMessage = null;
     this.lastEventId = null;
     this.resumeAttempts = 0;
+    this.currentPhase = null;
   }
 
   /** Load an existing conversation's messages (for "return to chat" flow). */
@@ -180,6 +196,18 @@ class ChatState {
     for (let i = content.length - 1; i >= 0; i--) {
       const block = content[i];
       if (block.type === 'tool_use' && block.name === toolName && block.isLoading) {
+        return block;
+      }
+    }
+    return null;
+  }
+
+  /** Find the PlanBlock with the given planId on the in-flight assistant message. */
+  private findPlanBlock(planId: string): PlanBlock | null {
+    const msg = this.currentAssistantMessage;
+    if (!msg) return null;
+    for (const block of msg.content) {
+      if (block.type === 'plan' && block.planId === planId) {
         return block;
       }
     }
@@ -245,10 +273,67 @@ class ChatState {
         });
       },
 
+      onPlan: (event: PlanEvent) => {
+        const msg = this.currentAssistantMessage;
+        if (!msg) return;
+        // If a plan with this id already exists (resume replay), leave
+        // it in place so plan_update events keep applying cleanly.
+        if (this.findPlanBlock(event.plan_id)) return;
+
+        const steps: PlanStep[] = event.steps.map((text) => ({
+          text,
+          status: 'pending',
+        }));
+        const planBlock: PlanBlock = {
+          type: 'plan',
+          planId: event.plan_id,
+          steps,
+        };
+        // Plan goes at the top of the bubble — most recent first if we
+        // ever have multiple, but practically there is only one per turn.
+        msg.content.unshift(planBlock);
+      },
+
+      onPlanUpdate: (event: PlanUpdateEvent) => {
+        const plan = this.findPlanBlock(event.plan_id);
+        if (!plan) return;
+
+        const now = Date.now();
+        for (const upd of event.updates) {
+          const step = plan.steps[upd.step_index];
+          if (!step) continue;
+          if (upd.status === 'in_progress' && step.status !== 'in_progress') {
+            step.startedAt = now;
+          }
+          if (
+            (upd.status === 'completed' || upd.status === 'skipped') &&
+            !step.completedAt
+          ) {
+            step.completedAt = now;
+          }
+          step.status = upd.status;
+          if (upd.note !== undefined) {
+            step.note = upd.note;
+          }
+        }
+      },
+
+      onPhase: (event: PhaseEvent) => {
+        this.currentPhase = {
+          phase: event.phase,
+          label: event.label,
+          tool: event.tool,
+          turn: event.turn,
+          maxTurns: event.max_turns,
+          startedAt: Date.now(),
+        };
+      },
+
       onDone: () => {
         this.isStreaming = false;
         this.abortController = null;
         this.resumeAttempts = 0;
+        this.currentPhase = null;
       },
 
       onError: (message: string) => {
@@ -265,6 +350,7 @@ class ChatState {
         this.error = message;
         this.isStreaming = false;
         this.abortController = null;
+        this.currentPhase = null;
       },
 
       onInterrupted: (message: string) => {
@@ -276,6 +362,7 @@ class ChatState {
         this.isStreaming = false;
         this.abortController = null;
         this.resumeAttempts = 0;
+        this.currentPhase = null;
       },
 
       onExperimentCreated: (data) => {
