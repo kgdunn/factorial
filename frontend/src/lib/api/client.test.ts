@@ -1,13 +1,15 @@
 /**
- * Tests for ``authFetch`` — in particular the transparent
- * refresh-on-401-and-retry behaviour, which keeps users from seeing
- * spurious "401" errors when their 30-minute access token expires
- * while the page is still open.
+ * Tests for ``authFetch`` in the cookie-auth world:
+ *
+ * - credentials: 'include' on every call (so the browser sends the cookie)
+ * - X-CSRF-Token mirrored from the factorial_csrf cookie on unsafe methods
+ * - 401 opens the inline reauth modal once and replays the request
+ * - 5xx is surfaced unchanged (no logout, no modal)
  */
 import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { authFetch } from './client';
-import { authState } from '$lib/state/auth.svelte';
+import * as reauth from '$lib/state/reauth.svelte';
 
 function jsonResp(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -20,94 +22,79 @@ describe('authFetch', () => {
   let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   beforeEach(() => {
-    authState.accessToken = 'old-token';
-    authState.refreshToken = 'refresh-token';
+    document.cookie = 'factorial_csrf=test-csrf; path=/';
     fetchSpy = vi.spyOn(globalThis, 'fetch');
   });
 
   afterEach(() => {
     fetchSpy.mockRestore();
-    authState.accessToken = null;
-    authState.refreshToken = null;
+    document.cookie = 'factorial_csrf=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   });
 
-  function authHeader(call: number): string | null {
-    const init = fetchSpy.mock.calls[call][1] as RequestInit | undefined;
-    return new Headers(init?.headers).get('Authorization');
+  function init(call: number): RequestInit {
+    return fetchSpy.mock.calls[call][1] as RequestInit;
   }
 
-  it('attaches the bearer token on the first attempt', async () => {
+  it("sends credentials: 'include' on every call", async () => {
     fetchSpy.mockResolvedValueOnce(jsonResp({ ok: true }));
-
-    const resp = await authFetch('/api/v1/experiments');
-
-    expect(resp.status).toBe(200);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(authHeader(0)).toBe('Bearer old-token');
+    await authFetch('/api/v1/experiments');
+    expect(init(0).credentials).toBe('include');
   });
 
-  it('refreshes once on 401 and retries with the new token', async () => {
+  it('attaches X-CSRF-Token from the cookie on POST', async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResp({ ok: true }));
+    await authFetch('/api/v1/experiments', { method: 'POST' });
+    const headers = new Headers(init(0).headers);
+    expect(headers.get('X-CSRF-Token')).toBe('test-csrf');
+  });
+
+  it('does not attach X-CSRF-Token on GET', async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResp({ ok: true }));
+    await authFetch('/api/v1/experiments');
+    const headers = new Headers(init(0).headers);
+    expect(headers.get('X-CSRF-Token')).toBeNull();
+  });
+
+  it('opens the reauth modal on 401 and retries on success', async () => {
     fetchSpy
       .mockResolvedValueOnce(jsonResp({ detail: 'expired' }, 401)) // initial
-      .mockResolvedValueOnce(
-        jsonResp({ access_token: 'new-token', refresh_token: 'new-refresh' }),
-      ) // POST /auth/refresh
       .mockResolvedValueOnce(jsonResp({ ok: true })); // retry
+
+    const triggerSpy = vi
+      .spyOn(reauth, 'triggerReauth')
+      .mockResolvedValueOnce(undefined);
 
     const resp = await authFetch('/api/v1/experiments');
 
     expect(resp.status).toBe(200);
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
-    expect(authHeader(0)).toBe('Bearer old-token');
-    expect(authHeader(2)).toBe('Bearer new-token');
-    expect(authState.accessToken).toBe('new-token');
+    expect(triggerSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    triggerSpy.mockRestore();
   });
 
-  it('returns the original 401 when the refresh call itself fails', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(jsonResp({ detail: 'expired' }, 401))
-      .mockResolvedValueOnce(jsonResp({ detail: 'bad refresh' }, 401));
+  it('returns the original 401 when the user cancels reauth', async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResp({ detail: 'expired' }, 401));
+
+    const triggerSpy = vi
+      .spyOn(reauth, 'triggerReauth')
+      .mockRejectedValueOnce(new Error('cancelled'));
 
     const resp = await authFetch('/api/v1/experiments');
 
     expect(resp.status).toBe(401);
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    // ``authState.refresh()`` logs the user out on a failed refresh; the
-    // layout auth guard then redirects to /login on the next render.
-    expect(authState.accessToken).toBeNull();
-  });
-
-  it('shares a single refresh across concurrent 401s', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(jsonResp({ detail: 'expired' }, 401)) // req A initial
-      .mockResolvedValueOnce(jsonResp({ detail: 'expired' }, 401)) // req B initial
-      .mockResolvedValueOnce(
-        jsonResp({ access_token: 'new-token', refresh_token: 'new-refresh' }),
-      ) // single shared refresh
-      .mockResolvedValueOnce(jsonResp({ ok: true })) // retry A
-      .mockResolvedValueOnce(jsonResp({ ok: true })); // retry B
-
-    const [a, b] = await Promise.all([
-      authFetch('/api/v1/experiments'),
-      authFetch('/api/v1/experiments?page=2'),
-    ]);
-
-    expect(a.status).toBe(200);
-    expect(b.status).toBe(200);
-    // Exactly one refresh call across the two retries.
-    const refreshCalls = fetchSpy.mock.calls.filter(
-      ([url]) => typeof url === 'string' && url.includes('/auth/refresh'),
-    );
-    expect(refreshCalls).toHaveLength(1);
-  });
-
-  it('passes through unauthenticated when no token is present', async () => {
-    authState.accessToken = null;
-    fetchSpy.mockResolvedValueOnce(jsonResp({ ok: true }));
-
-    await authFetch('/api/v1/experiments');
-
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(authHeader(0)).toBeNull();
+    triggerSpy.mockRestore();
+  });
+
+  it('does not open the reauth modal on 5xx — surfaces the error', async () => {
+    fetchSpy.mockResolvedValueOnce(jsonResp({ detail: 'down' }, 503));
+
+    const triggerSpy = vi.spyOn(reauth, 'triggerReauth');
+
+    const resp = await authFetch('/api/v1/experiments');
+
+    expect(resp.status).toBe(503);
+    expect(triggerSpy).not.toHaveBeenCalled();
+    triggerSpy.mockRestore();
   });
 });
