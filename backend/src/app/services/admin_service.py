@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, case, cast, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
@@ -175,26 +175,26 @@ async def _aggregate_for_users(
     for uid, count in fb_rows:
         agg[uid].feedback_count = int(count or 0)
 
-    # Average runs = average JSON array length of results_data across the user's
-    # experiments.  json_array_length works on both SQLite and PostgreSQL for
-    # JSON-typed columns (Experiment.results_data is declared as plain JSON).
-    # Postgres rejects ``coalesce(<json>, '[]')`` because the bound literal is
-    # VARCHAR; cast it to JSON so both COALESCE branches share a type.
-    open_case = case((Experiment.status != "completed", 1), else_=0)
-    empty_json_array = cast("[]", JSON)
+    # Open-experiment count + average results_data length, computed in Python.
+    # Earlier revisions ran ``func.json_array_length(coalesce(results_data, '[]'))``
+    # in SQL, but that path is fragile on PostgreSQL: COALESCE rejects mixing
+    # ``json`` with a VARCHAR literal, the CAST-to-JSON workaround still tripped
+    # over asyncpg parameter typing, and ``json_array_length`` raises if any row
+    # ever stores a non-array (object/scalar) value. Pulling the rows back and
+    # rolling them up here is dialect-independent and tolerant of stray shapes.
     exp_rows = await db.execute(
-        select(
-            Experiment.user_id,
-            func.coalesce(func.sum(open_case), 0),
-            func.avg(func.json_array_length(func.coalesce(Experiment.results_data, empty_json_array))),
-        )
-        .where(Experiment.user_id.in_(ids))
-        .group_by(Experiment.user_id)
+        select(Experiment.user_id, Experiment.status, Experiment.results_data).where(Experiment.user_id.in_(ids))
     )
-    for uid, open_count, avg_runs in exp_rows:
-        a = agg[uid]
-        a.open_experiments = int(open_count or 0)
-        a.avg_runs_per_experiment = float(avg_runs) if avg_runs is not None else None
+    open_counts: dict[uuid.UUID, int] = {uid: 0 for uid in agg}
+    run_totals: dict[uuid.UUID, list[int]] = {uid: [] for uid in agg}
+    for uid, status_str, results in exp_rows:
+        if status_str != "completed":
+            open_counts[uid] += 1
+        run_totals[uid].append(len(results) if isinstance(results, list) else 0)
+    for uid, a in agg.items():
+        a.open_experiments = open_counts[uid]
+        runs = run_totals[uid]
+        a.avg_runs_per_experiment = (sum(runs) / len(runs)) if runs else None
 
     bal_rows = await db.execute(
         select(UserBalance.user_id, UserBalance.balance_usd, UserBalance.balance_tokens).where(
