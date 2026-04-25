@@ -6,14 +6,15 @@ import contextlib
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth_cookies import set_session_cookies
 from app.api.deps import AuthUser, require_admin
 from app.api.rate_limit import limiter
 from app.config import settings
 from app.db.session import get_db_session
-from app.schemas.auth import TokenResponse
+from app.schemas.auth import UserResponse
 from app.schemas.signup import (
     InviteRegisterRequest,
     InviteValidateResponse,
@@ -24,8 +25,8 @@ from app.schemas.signup import (
     SignupSubmitRequest,
     SignupSubmitResponse,
 )
+from app.services import balance_service, session_service
 from app.services.admin_service import list_admin_emails
-from app.services.auth_service import create_access_token, create_refresh_token
 from app.services.email_service import send_admin_notification, send_invite_email, send_signup_confirmation
 from app.services.signup_service import (
     approve_signup,
@@ -91,14 +92,15 @@ async def validate_invite(
         return InviteValidateResponse(email="", valid=False)
 
 
-@router.post("/invite/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/invite/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(settings.register_rate_limit)
 async def register_with_invite(
     request: Request,
+    response: Response,
     body: InviteRegisterRequest,
     db: AsyncSession = Depends(get_db_session),
-) -> TokenResponse:
-    """Complete registration using an invite token."""
+) -> UserResponse:
+    """Complete registration using an invite token; logs the user in via cookie."""
     try:
         user = await complete_registration(
             db,
@@ -109,9 +111,28 @@ async def register_with_invite(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
-    return TokenResponse(
-        access_token=create_access_token(user.id, user.email),
-        refresh_token=create_refresh_token(user.id),
+    new_session = await session_service.create_session(
+        db,
+        user_id=user.id,
+        user_agent=request.headers.get("user-agent"),
+        ip=request.client.host if request.client else None,
+    )
+    set_session_cookies(
+        response,
+        session_cookie_value=new_session.cookie_value,
+        csrf_token=new_session.csrf_token,
+    )
+
+    balance = await balance_service.get_balance(db, user.id)
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        background=user.role.name if user.role_id and user.role else None,
+        is_admin=user.is_admin,
+        created_at=None,
+        balance_usd=balance.balance_usd if balance else None,
+        balance_tokens=balance.balance_tokens if balance else None,
     )
 
 
