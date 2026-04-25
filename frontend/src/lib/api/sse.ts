@@ -34,7 +34,11 @@ async function parseSSEStream(
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
+    // sse_starlette emits CRLF terminators per the SSE spec; native browser
+    // EventSource handles both, but our manual parser must too — splitting
+    // on `\n` alone leaves a stray `\r` on the blank separator line and the
+    // ``line === ''`` dispatch check never fires.
+    const lines = buffer.split(/\r\n|\n/);
     // Keep the last (possibly incomplete) line in the buffer
     buffer = lines.pop() ?? '';
 
