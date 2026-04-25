@@ -91,6 +91,35 @@ context.
 - [x] **PR-3 — PATCH bump.** `ExportMenu.svelte` entries + `types.ts` enum
       sync + section split. No backend change.
 
+## DOE upload tool — chat agent integration (deferred)
+
+The current upload feature (PR #81) ships:
+- `POST /api/v1/experiments/uploads` + `/answers` + `/finalize` REST surface
+- `app.services.upload_parsing_service` (xlsx/csv → 2D matrix)
+- `app.services.upload_claude_service.discover_structure` (forced tool_use,
+  two tools: `report_design_structure` / `ask_clarifying_questions`)
+- Frontend wizard + reusable `<ExperimentDataTable>` + `<DataTableModal>`
+  with F2 keyboard shortcut
+
+What is **not** yet wired and should follow up:
+
+- [ ] Register `parse_uploaded_design` as a tool the chat agent can invoke.
+      Input shape `{rows: list[list[Any]]}` so a user pasting CSV-like text
+      into chat gets the same parsing behaviour. Implementation sketch:
+      add a `_LOCAL_TOOL_HANDLERS` registry to
+      `backend/src/app/services/tools.py`; have `execute_tool_call`
+      dispatch local handlers before falling through to
+      `process_improve`; expose `discover_structure` via a sync wrapper
+      that can be called from the agent thread.
+- [ ] File-attachment plumbing through the chat endpoint
+      (`backend/src/app/api/v1/endpoints/chat.py`). The chat endpoint
+      currently accepts JSON-only message turns; adding multipart
+      attachments + a transient cache keyed by `file_id` is its own
+      side quest. Agree with the user on UX before doing this.
+- [ ] Frontend: surface the chat tool's clarifying-question output via
+      the existing `ToolResultCard.svelte`, and route attachments
+      from `ChatWindow.svelte` into the new endpoint.
+
 ## Frontend — mobile
 
 - [ ] Replace the top-nav link group in `frontend/src/routes/+layout.svelte`

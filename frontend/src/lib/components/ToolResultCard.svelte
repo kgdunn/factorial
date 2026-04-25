@@ -1,7 +1,7 @@
 <script lang="ts">
   import BaseChart from './BaseChart.svelte';
   import DesignEvaluationBlock from './DesignEvaluationBlock.svelte';
-  import DesignMatrix from './DesignMatrix.svelte';
+  import ExperimentDataTable from './ExperimentDataTable.svelte';
 
   interface Props {
     toolName: string;
@@ -136,7 +136,7 @@
 
       {:else if isDesignMatrix}
         <!-- Design matrix table -->
-        <DesignMatrix matrix={designMatrix} columns={designColumns} />
+        <ExperimentDataTable rows={designMatrix} factorColumns={designColumns} />
 
       {:else if isEvaluation}
         <!-- Design evaluation block -->

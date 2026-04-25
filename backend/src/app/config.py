@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     tool_max_cells: int = 1_000_000
     tool_max_string: int = 100_000
 
+    # DOE upload (Excel/CSV ingestion via Claude). ``upload_max_bytes`` is the
+    # raw file size cap; ``upload_max_cells`` bounds how much of the parsed
+    # 2D matrix we will hand to Claude in a single round-trip.
+    upload_max_bytes: int = 5 * 1024 * 1024
+    upload_max_cells: int = 10_000
+
     # Fake-data simulator. When true, reveal_simulator dispatches with
     # confirmed=True on the FIRST call and bypasses the user-confirmation
     # gate. Intended only for debugging or internal tooling; keep false

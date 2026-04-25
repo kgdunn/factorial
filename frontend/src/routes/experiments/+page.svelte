@@ -1,12 +1,15 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { experimentsState } from '$lib/state/experiments.svelte';
   import type { ExperimentStatus, ExperimentSummary } from '$lib/types';
   import TopBar from '$lib/components/brand/TopBar.svelte';
   import Btn from '$lib/components/brand/Btn.svelte';
   import StatusPill, { type StatusKind } from '$lib/components/brand/StatusPill.svelte';
   import Icon from '$lib/components/brand/Icon.svelte';
+  import UploadWizardModal from '$lib/components/UploadWizardModal.svelte';
 
   let confirmDeleteId = $state<string | null>(null);
+  let uploadOpen = $state(false);
 
   const FILTERS: { id: ExperimentStatus | null; label: string }[] = [
     { id: null, label: 'All' },
@@ -77,6 +80,9 @@
 
   {#snippet actions()}
     <Btn variant="ghost" icon="search" size="sm">Search</Btn>
+    <Btn variant="ghost" icon="upload" size="sm" onclick={() => (uploadOpen = true)}>
+      Import from file
+    </Btn>
     <Btn variant="primary" icon="plus" href="/chat">New experiment</Btn>
   {/snippet}
 
@@ -141,8 +147,11 @@
           Start a conversation with the agent — name a response, a few factors,
           and roughly how many runs you can afford. The agent will draft a plan.
         </div>
-        <div class="mt-6 flex justify-center">
+        <div class="mt-6 flex justify-center gap-3">
           <Btn variant="primary" icon="arrow" href="/chat">Start with the agent</Btn>
+          <Btn variant="ghost" icon="upload" onclick={() => (uploadOpen = true)}>
+            Import from spreadsheet
+          </Btn>
         </div>
       </div>
     {:else}
@@ -250,3 +259,12 @@
     {/if}
   </div>
 </div>
+
+<UploadWizardModal
+  open={uploadOpen}
+  onClose={() => (uploadOpen = false)}
+  onComplete={(experimentId) => {
+    uploadOpen = false;
+    goto(`/experiments/${experimentId}`);
+  }}
+/>

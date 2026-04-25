@@ -222,8 +222,9 @@ This is load-bearing: short-circuiting the walkthrough defeats the whole point o
 
 ## Git & PR Workflow
 
-- **Commit after every micro step** — each logical change (new file, edit, deletion) gets its own commit.
+- **Commit after every micro step** — each logical change (new file, edit, deletion) gets its own commit. Do not batch unrelated changes into a single commit, and do not let a session go quiet for many file edits before pushing. Visible incremental progress is a hard requirement, not a style preference.
 - **Push regularly** — don't accumulate unpushed commits.
+- **Plan-first PRs for non-trivial features** — when a task is anything more than a small bug fix, kick off with an **empty initial commit** (`git commit --allow-empty -m "plan: <feature>"`), push, and open the PR immediately with the full plan as the PR body. Subsequent commits land per file change against the same PR so the user can watch progress in real time. The plan-as-PR-description doubles as a discoverable record of intent for reviewers.
 - **Open a PR right away** — create a pull request as soon as the branch has its first commit. Don't wait until the work is "done."
 - **Always share the PR link** — after creating a pull request, always include the PR URL in your response to the user.
 - **Never push lock files.** Claude Code sessions must not stage, commit, or

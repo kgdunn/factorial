@@ -2,7 +2,9 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { experimentsState } from '$lib/state/experiments.svelte';
-  import DesignMatrix from '$lib/components/DesignMatrix.svelte';
+  import { onMount } from 'svelte';
+  import DataTableModal from '$lib/components/DataTableModal.svelte';
+  import ExperimentDataTable from '$lib/components/ExperimentDataTable.svelte';
   import DesignEvaluationBlock from '$lib/components/DesignEvaluationBlock.svelte';
   import ExportMenu from '$lib/components/ExportMenu.svelte';
   import ResultsEntryForm from '$lib/components/ResultsEntryForm.svelte';
@@ -24,6 +26,30 @@
   let confirmDelete = $state(false);
   let saveSuccess = $state(false);
   let shareModalOpen = $state(false);
+  let tableModalOpen = $state(false);
+
+  // F2 toggles the table modal — desktop browsers only (avoid mobile virtual
+  // keyboards triggering it). Ignored when the user is typing in an input,
+  // textarea, or contenteditable element.
+  onMount(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+
+    function isInsideEditable(target: EventTarget | null): boolean {
+      if (!(target instanceof HTMLElement)) return false;
+      return target.matches('input, textarea, select, [contenteditable="true"]');
+    }
+
+    function handler(e: KeyboardEvent) {
+      if (e.key !== 'F2' || e.repeat) return;
+      if (isInsideEditable(e.target)) return;
+      e.preventDefault();
+      tableModalOpen = !tableModalOpen;
+    }
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  });
 
   // Load experiment when page params change
   $effect(() => {
@@ -233,16 +259,28 @@
         <div class="mb-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div class="mb-4 flex items-center justify-between">
             <h2 class="text-lg font-semibold text-gray-800">Design Matrix</h2>
-            {#if exp.design_data.design_coded && exp.design_data.design_actual}
+            <div class="flex items-center gap-2">
               <button
                 class="rounded border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-50"
-                onclick={() => (showCoded = !showCoded)}
+                onclick={() => (tableModalOpen = true)}
+                title="Open table in a modal (F2)"
               >
-                {showCoded ? 'Show Actual' : 'Show Coded'}
+                View as table (F2)
               </button>
-            {/if}
+              {#if exp.design_data.design_coded && exp.design_data.design_actual}
+                <button
+                  class="rounded border border-gray-300 px-3 py-1 text-xs text-gray-500 hover:bg-gray-50"
+                  onclick={() => (showCoded = !showCoded)}
+                >
+                  {showCoded ? 'Show Actual' : 'Show Coded'}
+                </button>
+              {/if}
+            </div>
           </div>
-          <DesignMatrix matrix={designMatrix()} />
+          <ExperimentDataTable
+            rows={designMatrix()}
+            factorColumns={designMatrix().length > 0 ? Object.keys(designMatrix()[0]) : []}
+          />
         </div>
       {/if}
 
@@ -276,6 +314,14 @@
         experimentId={exp.id}
         bind:open={shareModalOpen}
         onClose={() => (shareModalOpen = false)}
+      />
+
+      <DataTableModal
+        open={tableModalOpen}
+        onClose={() => (tableModalOpen = false)}
+        title={exp.name}
+        rows={designMatrix()}
+        factorColumns={designMatrix().length > 0 ? Object.keys(designMatrix()[0]) : []}
       />
     {/if}
   </div>

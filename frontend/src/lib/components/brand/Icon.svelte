@@ -16,6 +16,7 @@
     | 'search'
     | 'sparkle'
     | 'download'
+    | 'upload'
     | 'back'
     | 'forward';
 
@@ -150,6 +151,15 @@
   {:else if name === 'download'}
     <path
       d="M10 3 V13 M6 9 L10 13 L14 9 M4 16 H16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  {:else if name === 'upload'}
+    <path
+      d="M10 17 V7 M6 11 L10 7 L14 11 M4 4 H16"
       fill="none"
       stroke="currentColor"
       stroke-width="1.4"

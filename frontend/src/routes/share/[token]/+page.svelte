@@ -2,7 +2,7 @@
   import { page } from '$app/stores';
   import BaseChart from '$lib/components/BaseChart.svelte';
   import DesignEvaluationBlock from '$lib/components/DesignEvaluationBlock.svelte';
-  import DesignMatrix from '$lib/components/DesignMatrix.svelte';
+  import ExperimentDataTable from '$lib/components/ExperimentDataTable.svelte';
   import SignupCTA from '$lib/components/SignupCTA.svelte';
   import { exportPublicShare, fetchPublicShare } from '$lib/api/shares';
   import type { ExportFormat, PublicExperimentView } from '$lib/types';
@@ -169,7 +169,7 @@
       {#if matrix().length > 0}
         <div class="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 class="mb-4 text-lg font-semibold text-gray-800">Design Matrix</h2>
-          <DesignMatrix matrix={matrix()} />
+          <ExperimentDataTable rows={matrix()} factorColumns={matrix().length > 0 ? Object.keys(matrix()[0]) : []} />
         </div>
       {/if}
 
