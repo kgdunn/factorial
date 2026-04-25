@@ -126,3 +126,20 @@ What is **not** yet wired and should follow up:
       with a hamburger drawer on small screens. The current patch hides the
       balance span and the display-name span under `sm:` so the row fits on
       a phone; a drawer would surface them again without wrapping.
+
+## Chat agent latency (follow-ups from PR #99)
+
+- [ ] Once we have a few weeks of `logs/timing.jsonl` data, decide whether
+      to surface the per-phase breakdown in the UI (debug overlay or admin
+      page). The current per-step `1m 0s` badge is enough for casual users;
+      this is engineering instrumentation only.
+- [ ] Replace the per-event `INSERT … COMMIT` in
+      `app.services.agent_service._persist_chat_event` with a single
+      `executemany` per turn (or move to a per-turn snapshot row) once the
+      timing log shows DB write latency is still material after the
+      token-batching landed.
+- [ ] Replace the `await asyncio.sleep(0.01)` busy poll in
+      `app.services.agent_service._stream_from_queue` with an
+      `asyncio.Queue` (or a thread-safe bridge) so the SSE generator wakes
+      on the next event instead of polling. Worth measuring first via the
+      timing log to confirm the poll latency is actually visible.
