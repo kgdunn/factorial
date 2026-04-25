@@ -69,7 +69,7 @@ End‑to‑end, for a non‑admin user:
     │                                    │     role_id from signup    │
     │                                    │     signup: status=registered
     │                                    │                            │
-    │                                    │    ◄── access + refresh JWT
+    │                                    │    ◄── Set-Cookie: factorial_session
 ```
 
 Key properties:
@@ -98,7 +98,7 @@ Endpoints:
 
 - `POST /auth/password-reset/request` — public, rate‑limited. If the email matches an active user, issues a token and emails a link. Always returns 200 (no email enumeration).
 - `GET /auth/setup/validate?token=...` — checks token exists, is `setup`‑or‑`reset`, and not expired/used. Returns the email for display.
-- `POST /auth/setup/complete` — takes `{ token, password }`, sets the password, marks token used, returns JWT pair. Works for both purposes.
+- `POST /auth/setup/complete` — takes `{ token, password }`, sets the password, marks token used, mints a session and Sets the `factorial_session` + `factorial_csrf` cookies. Works for both purposes.
 - `POST /auth/password/change` — authenticated, `{ current_password, new_password }`.
 
 ## 4. Roles

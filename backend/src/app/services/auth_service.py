@@ -1,17 +1,19 @@
-"""Authentication service: password hashing, JWT tokens, user CRUD."""
+"""Authentication service: password hashing and user CRUD.
+
+JWT minting and decoding lived here previously; both are gone now that
+the browser path uses opaque session cookies (see
+``services/session_service.py``).
+"""
 
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Any
+from datetime import UTC, datetime
 
 import bcrypt
-from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.user import User
 
 # ---------------------------------------------------------------------------
@@ -34,45 +36,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against a bcrypt hash."""
     pw_bytes = plain_password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
     return bcrypt.checkpw(pw_bytes, hashed_password.encode("utf-8"))
-
-
-# ---------------------------------------------------------------------------
-# JWT tokens
-# ---------------------------------------------------------------------------
-
-
-def create_access_token(user_id: uuid.UUID, email: str) -> str:
-    """Create a short-lived JWT access token."""
-    expire = datetime.now(UTC) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    payload: dict[str, Any] = {
-        "sub": str(user_id),
-        "email": email,
-        "type": "access",
-        "exp": expire,
-    }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-
-
-def create_refresh_token(user_id: uuid.UUID) -> str:
-    """Create a longer-lived JWT refresh token."""
-    expire = datetime.now(UTC) + timedelta(days=settings.jwt_refresh_token_expire_days)
-    payload: dict[str, Any] = {
-        "sub": str(user_id),
-        "type": "refresh",
-        "exp": expire,
-    }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-
-
-def decode_token(token: str) -> dict[str, Any]:
-    """Decode and validate a JWT token.
-
-    Raises
-    ------
-    JWTError
-        If the token is invalid, expired, or cannot be decoded.
-    """
-    return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
 
 
 # ---------------------------------------------------------------------------

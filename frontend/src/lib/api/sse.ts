@@ -10,8 +10,8 @@
  * alongside custom event names).
  */
 
-import { authState } from '$lib/state/auth.svelte';
 import { anthropicStatus } from '$lib/state/anthropicStatus.svelte';
+import { triggerReauth } from '$lib/state/reauth.svelte';
 import type {
   ExperimentCreatedEvent,
   PhaseEvent,
@@ -19,6 +19,8 @@ import type {
   PlanUpdateEvent,
   SSECallbacks,
 } from '$lib/types';
+
+import { csrfHeader } from './csrf';
 
 // ---------------------------------------------------------------------------
 // SSE line parser
@@ -173,17 +175,36 @@ export function streamChat(
 
   (async () => {
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (authState.accessToken) {
-        headers['Authorization'] = `Bearer ${authState.accessToken}`;
-      }
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...csrfHeader(),
+      };
 
-      const response = await fetch('/api/v1/chat', {
+      let response = await fetch('/api/v1/chat', {
         method: 'POST',
+        credentials: 'include',
         headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+
+      if (response.status === 401) {
+        // Session expired before the stream opened; pause for re-auth
+        // and replay the request once.
+        try {
+          await triggerReauth();
+        } catch {
+          callbacks.onError('Session expired');
+          return;
+        }
+        response = await fetch('/api/v1/chat', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      }
 
       if (!response.ok) {
         const text = await response.text();
@@ -233,21 +254,37 @@ export function resumeChatStream(
   (async () => {
     try {
       const headers: Record<string, string> = {};
-      if (authState.accessToken) {
-        headers['Authorization'] = `Bearer ${authState.accessToken}`;
-      }
       if (lastEventId) {
         headers['Last-Event-ID'] = lastEventId;
       }
 
-      const response = await fetch(
+      let response = await fetch(
         `/api/v1/chat/${encodeURIComponent(conversationId)}/resume`,
         {
           method: 'GET',
+          credentials: 'include',
           headers,
           signal: controller.signal,
         },
       );
+
+      if (response.status === 401) {
+        try {
+          await triggerReauth();
+        } catch {
+          callbacks.onError('Session expired');
+          return;
+        }
+        response = await fetch(
+          `/api/v1/chat/${encodeURIComponent(conversationId)}/resume`,
+          {
+            method: 'GET',
+            credentials: 'include',
+            headers,
+            signal: controller.signal,
+          },
+        );
+      }
 
       if (response.status === 404) {
         // Nothing to resume — surface as an interrupted signal so the

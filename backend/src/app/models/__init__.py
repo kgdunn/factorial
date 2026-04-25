@@ -3,6 +3,7 @@ from app.models.conversation import ChatEvent, Conversation, Message, ToolCall  
 from app.models.experiment import Experiment  # noqa: F401
 from app.models.experiment_share import ExperimentShare  # noqa: F401
 from app.models.role import Role  # noqa: F401
+from app.models.session import Session  # noqa: F401
 from app.models.setup_token import SetupToken  # noqa: F401
 from app.models.signup_request import SignupRequest  # noqa: F401
 from app.models.simulator import Simulator  # noqa: F401

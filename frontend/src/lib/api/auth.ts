@@ -1,12 +1,13 @@
 /**
- * REST API client for authentication endpoints.
+ * REST API client for cookie-based authentication.
+ *
+ * The session and CSRF cookies are set by the backend on /auth/login (and
+ * /auth/setup/complete and /signup/invite/register) and are sent
+ * automatically by the browser on subsequent requests. Nothing in the
+ * frontend touches localStorage; identity comes from /auth/me.
  */
 
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-}
+import { csrfHeader } from './csrf';
 
 export interface UserProfile {
   id: string;
@@ -17,30 +18,6 @@ export interface UserProfile {
   created_at: string | null;
   balance_usd: string | null;
   balance_tokens: number | null;
-}
-
-export async function postRegister(
-  email: string,
-  password: string,
-  displayName?: string,
-  background?: string,
-): Promise<TokenResponse> {
-  const body: Record<string, string> = { email, password };
-  if (displayName) body.display_name = displayName;
-  if (background) body.background = background;
-
-  const resp = await fetch('/api/v1/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (resp.status === 409) throw new Error('Email already registered');
-  if (!resp.ok) {
-    const data = await resp.json().catch(() => ({}));
-    throw new Error(data.detail || `Registration failed: ${resp.status}`);
-  }
-  return resp.json();
 }
 
 function browserTimezone(): string | undefined {
@@ -54,13 +31,14 @@ function browserTimezone(): string | undefined {
 export async function postLogin(
   email: string,
   password: string,
-): Promise<TokenResponse> {
+): Promise<UserProfile> {
   const payload: Record<string, string> = { email, password };
   const tz = browserTimezone();
   if (tz) payload.timezone = tz;
 
   const resp = await fetch('/api/v1/auth/login', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -73,24 +51,17 @@ export async function postLogin(
   return resp.json();
 }
 
-export async function postRefresh(
-  refreshToken: string,
-): Promise<TokenResponse> {
-  const resp = await fetch('/api/v1/auth/refresh', {
+export async function postLogout(): Promise<void> {
+  await fetch('/api/v1/auth/logout', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    credentials: 'include',
+    headers: csrfHeader(),
   });
-
-  if (!resp.ok) throw new Error('Token refresh failed');
-  return resp.json();
 }
 
-export async function getMe(accessToken: string): Promise<UserProfile> {
-  const resp = await fetch('/api/v1/auth/me', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
+export async function getMe(): Promise<UserProfile | null> {
+  const resp = await fetch('/api/v1/auth/me', { credentials: 'include' });
+  if (resp.status === 401) return null;
   if (!resp.ok) throw new Error('Failed to fetch user profile');
   return resp.json();
 }
@@ -120,9 +91,10 @@ export async function getSetupValidation(token: string): Promise<SetupValidateRe
   return resp.json();
 }
 
-export async function postSetupComplete(token: string, password: string): Promise<TokenResponse> {
+export async function postSetupComplete(token: string, password: string): Promise<UserProfile> {
   const resp = await fetch('/api/v1/auth/setup/complete', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, password }),
   });

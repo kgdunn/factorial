@@ -1,4 +1,4 @@
-"""Tests for JWT authentication endpoints and dual auth (JWT + API key).
+"""Tests for cookie-based authentication endpoints and dual auth (cookie + API key).
 
 Uses mocks for the database layer to avoid requiring a running PostgreSQL instance.
 """
@@ -7,18 +7,17 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.api.deps import SESSION_COOKIE_NAME
 from app.config import Settings
 from app.main import app
-from app.services.auth_service import (
-    create_access_token,
-    create_refresh_token,
-    hash_password,
-)
+from app.services.auth_service import hash_password
+from app.services.session_service import NewSession
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,6 +48,39 @@ class _FakeUser:
         self.is_active = True
         self.created_at = "2026-01-01T00:00:00+00:00"
         self.updated_at = "2026-01-01T00:00:00+00:00"
+
+
+class _FakeSession:
+    """Mimics a Session ORM row for cookie-auth tests."""
+
+    def __init__(
+        self,
+        *,
+        session_bytes: bytes | None = None,
+        user_id: uuid.UUID = _TEST_USER_ID,
+        revoked: bool = False,
+        idle_offset_days: int = 30,
+    ):
+        self.id = session_bytes or b"\x01" * 32
+        self.public_id = uuid.uuid4()
+        self.user_id = user_id
+        self.family_id = uuid.uuid4()
+        now = datetime.now(UTC)
+        self.created_at = now
+        self.last_used_at = now
+        self.idle_expires_at = now + timedelta(days=idle_offset_days)
+        self.absolute_expires_at = now + timedelta(days=180)
+        self.revoked_at = now if revoked else None
+        self.user_agent = "pytest"
+        self.ip = "127.0.0.1"
+
+
+def _new_session_stub(user_id: uuid.UUID = _TEST_USER_ID) -> NewSession:
+    return NewSession(
+        cookie_value="dGVzdC1jb29raWUtdmFsdWU",  # arbitrary base64url
+        csrf_token="test-csrf-token",  # noqa: S106
+        session=_FakeSession(user_id=user_id),
+    )
 
 
 @contextmanager
@@ -109,24 +141,38 @@ class TestRegister:
 
 class TestLogin:
     @pytest.mark.asyncio
-    async def test_login_success(self, client):
-        """Login with valid credentials returns tokens."""
+    async def test_login_success_sets_cookies(self, client):
+        """Login with valid credentials sets the session and CSRF cookies."""
         fake_user = _FakeUser()
         mock_auth = AsyncMock(return_value=fake_user)
+        mock_session = AsyncMock(return_value=_new_session_stub())
 
-        with patch("app.api.v1.endpoints.auth.authenticate_user", mock_auth):
+        with (
+            patch("app.api.v1.endpoints.auth.authenticate_user", mock_auth),
+            patch("app.api.v1.endpoints.auth.session_service.create_session", mock_session),
+            patch("app.api.v1.endpoints.auth.balance_service.get_balance", AsyncMock(return_value=None)),
+            patch("app.api.v1.endpoints.auth.record_login_activity", AsyncMock()),
+        ):
             resp = await client.post(
                 "/api/v1/auth/login",
                 json={"email": _TEST_EMAIL, "password": _TEST_PASSWORD},
             )
         assert resp.status_code == 200
-        data = resp.json()
-        assert "access_token" in data
-        assert "refresh_token" in data
+        # No JWT in body — only the user profile.
+        body = resp.json()
+        assert "access_token" not in body
+        assert "refresh_token" not in body
+        assert body["email"] == _TEST_EMAIL
+        # Both cookies must be set.
+        cookies = resp.headers.get_list("set-cookie")
+        joined = " ".join(cookies)
+        assert "factorial_session=" in joined
+        assert "factorial_csrf=" in joined
+        assert "HttpOnly" in joined  # session cookie carries HttpOnly
 
     @pytest.mark.asyncio
     async def test_login_wrong_password(self, client):
-        """Login with wrong password returns 401."""
+        """Login with wrong password returns 401 and sets no cookie."""
         mock_auth = AsyncMock(return_value=None)
 
         with patch("app.api.v1.endpoints.auth.authenticate_user", mock_auth):
@@ -135,67 +181,11 @@ class TestLogin:
                 json={"email": _TEST_EMAIL, "password": "wrongpassword"},
             )
         assert resp.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_login_nonexistent_user(self, client):
-        """Login with unknown email returns 401."""
-        mock_auth = AsyncMock(return_value=None)
-
-        with patch("app.api.v1.endpoints.auth.authenticate_user", mock_auth):
-            resp = await client.post(
-                "/api/v1/auth/login",
-                json={"email": "nobody@example.com", "password": _TEST_PASSWORD},
-            )
-        assert resp.status_code == 401
+        assert "factorial_session" not in (resp.headers.get("set-cookie") or "")
 
 
 # ---------------------------------------------------------------------------
-# Token refresh
-# ---------------------------------------------------------------------------
-
-
-class TestTokenRefresh:
-    @pytest.mark.asyncio
-    async def test_refresh_success(self, client):
-        """Valid refresh token returns new token pair."""
-        fake_user = _FakeUser()
-        refresh_token = create_refresh_token(fake_user.id)
-        mock_get = AsyncMock(return_value=fake_user)
-
-        with patch("app.api.v1.endpoints.auth.get_user_by_id", mock_get):
-            resp = await client.post(
-                "/api/v1/auth/refresh",
-                json={"refresh_token": refresh_token},
-            )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "access_token" in data
-        assert "refresh_token" in data
-
-    @pytest.mark.asyncio
-    async def test_refresh_invalid_token(self, client):
-        """Invalid refresh token returns 401."""
-        resp = await client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": "invalid.token.here"},
-        )
-        assert resp.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_refresh_with_access_token_fails(self, client):
-        """Using an access token as a refresh token returns 401."""
-        fake_user = _FakeUser()
-        access_token = create_access_token(fake_user.id, fake_user.email)
-
-        resp = await client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": access_token},
-        )
-        assert resp.status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# /me endpoint
+# /me endpoint (uses dependency override; cookie-agnostic at this layer)
 # ---------------------------------------------------------------------------
 
 
@@ -246,7 +236,7 @@ class TestMe:
 
 
 # ---------------------------------------------------------------------------
-# Dual auth: JWT + API key
+# Dual auth: cookie + API key
 # ---------------------------------------------------------------------------
 
 
@@ -275,42 +265,50 @@ class TestDualAuth:
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_jwt_works_on_protected_endpoints(self):
-        """JWT Bearer token is accepted on protected endpoints."""
+    async def test_cookie_works_on_protected_endpoints(self):
+        """A valid session cookie is accepted on protected endpoints."""
         fake_user = _FakeUser()
-        access_token = create_access_token(fake_user.id, fake_user.email)
-        mock_get = AsyncMock(return_value=fake_user)
+        fake_session = _FakeSession(user_id=fake_user.id)
         test_settings = Settings(app_env="production", api_secret_key="my-secret-key")  # noqa: S106
 
         with (
             _without_auth_overrides(),
             patch("app.api.deps.settings", test_settings),
-            patch("app.api.deps.get_user_by_id", mock_get),
+            patch(
+                "app.api.deps.lookup_session_by_cookie",
+                AsyncMock(return_value=fake_session),
+            ),
+            patch("app.api.deps.get_user_by_id", AsyncMock(return_value=fake_user)),
         ):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
                 resp = await ac.get(
                     "/api/v1/tools",
-                    headers={"Authorization": f"Bearer {access_token}"},
+                    cookies={SESSION_COOKIE_NAME: "any-cookie-value"},
                 )
         assert resp.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_invalid_jwt_falls_back_to_api_key(self):
-        """Invalid JWT doesn't block API key fallback."""
+    async def test_invalid_cookie_falls_back_to_api_key(self):
+        """An invalid cookie does not block the API-key fallback."""
         test_settings = Settings(
             app_env="production",
             api_secret_key="my-secret-key",  # noqa: S106
         )
 
-        with _without_auth_overrides(), patch("app.api.deps.settings", test_settings):
+        with (
+            _without_auth_overrides(),
+            patch("app.api.deps.settings", test_settings),
+            patch(
+                "app.api.deps.lookup_session_by_cookie",
+                AsyncMock(return_value=None),
+            ),
+        ):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
                 resp = await ac.get(
                     "/api/v1/tools",
-                    headers={
-                        "Authorization": "Bearer invalid-token",
-                        "X-API-Key": "my-secret-key",
-                    },
+                    cookies={SESSION_COOKIE_NAME: "garbage"},
+                    headers={"X-API-Key": "my-secret-key"},
                 )
         assert resp.status_code == 200

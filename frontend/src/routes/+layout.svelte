@@ -8,6 +8,7 @@
   import { anthropicStatus } from '$lib/state/anthropicStatus.svelte';
   import Wordmark from '$lib/components/brand/Wordmark.svelte';
   import SystemBanner from '$lib/components/brand/SystemBanner.svelte';
+  import ReauthModal from '$lib/components/auth/ReauthModal.svelte';
   import FeedbackLauncher from '$lib/components/feedback/FeedbackLauncher.svelte';
 
   let { children }: { children: Snippet } = $props();
@@ -29,16 +30,19 @@
     return publicPathPrefixes.some((prefix) => path.startsWith(prefix));
   }
 
-  // Auth guard: redirect to /login if not authenticated on protected pages
+  // Auth guard: redirect to /login if not authenticated on protected pages.
+  // Wait for the initial /auth/me round-trip so we don't redirect-flash on
+  // cold load when the user is actually signed in via cookie.
   $effect(() => {
+    if (!authState.bootComplete) return;
     const currentPath = $page.url.pathname;
     if (!authState.isAuthenticated && !isPublicPath(currentPath)) {
       goto('/login');
     }
   });
 
-  function handleLogout() {
-    authState.logout();
+  async function handleLogout() {
+    await authState.logout();
     goto('/login');
   }
 </script>
@@ -80,9 +84,13 @@
             ${Number(authState.user.balance_usd).toFixed(2)}
           </span>
         {/if}
-        <span class="hidden font-mono text-xs text-ink-faint sm:inline">
+        <a
+          href="/profile"
+          class="hidden font-mono text-xs text-ink-faint underline-offset-2 hover:text-ink hover:underline sm:inline"
+          title="Profile and active sessions"
+        >
           {authState.user?.display_name || authState.user?.email || ''}
-        </span>
+        </a>
         <button
           onclick={handleLogout}
           class="cursor-pointer font-sans text-sm text-ink-soft transition-colors hover:text-[color:var(--color-negative)]"
@@ -112,4 +120,5 @@
   </main>
 
   <FeedbackLauncher />
+  <ReauthModal />
 </div>

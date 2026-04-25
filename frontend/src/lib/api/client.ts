@@ -1,57 +1,50 @@
 /**
- * Authenticated fetch wrapper.
+ * Cookie-aware fetch wrapper.
  *
- * Injects the Authorization header with the current access token, and
- * transparently refreshes once on a 401 so users don't see "Failed to
- * fetch: 401" the moment their 30-minute access token expires. If the
- * refresh fails, ``authState.refresh`` calls ``logout`` for us and the
- * layout-level auth guard handles the redirect to ``/login``.
+ * The session cookie is sent automatically; the wrapper just adds the
+ * CSRF header on state-changing requests and recovers from a 401 by
+ * opening the inline re-auth modal once and replaying the request after
+ * sign-in. Concurrent 401s share a single modal via the reauth state.
+ *
+ * 5xx responses are surfaced to the caller and never trigger logout —
+ * a brief deploy-time outage no longer kicks the user back to /login.
  */
 
-import { authState } from '$lib/state/auth.svelte';
+import { triggerReauth } from '$lib/state/reauth.svelte';
 
-/**
- * Shared in-flight refresh promise. Concurrent 401s from different
- * components must not all kick off their own refresh — that would race
- * the refresh-token rotation and log the user out.
- */
-let refreshInFlight: Promise<boolean> | null = null;
+import { csrfHeader } from './csrf';
 
-function refreshOnce(): Promise<boolean> {
-  if (!refreshInFlight) {
-    refreshInFlight = authState.refresh().finally(() => {
-      refreshInFlight = null;
-    });
-  }
-  return refreshInFlight;
-}
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-function withAuthHeader(init: RequestInit | undefined, token: string): RequestInit {
+function withCookieHeaders(init: RequestInit | undefined): RequestInit {
+  const method = (init?.method || 'GET').toUpperCase();
   const headers = new Headers(init?.headers);
-  headers.set('Authorization', `Bearer ${token}`);
-  return { ...init, headers };
+  if (UNSAFE_METHODS.has(method)) {
+    for (const [k, v] of Object.entries(csrfHeader())) headers.set(k, v);
+  }
+  return { ...init, credentials: 'include', headers };
 }
 
 /**
- * Wrapper around fetch() that injects the Bearer token and recovers
- * from a single 401 by refreshing the access token once and retrying.
- * Falls through to a plain fetch when no token is available.
+ * Wrapper around fetch() that injects credentials + CSRF and recovers
+ * from a single 401 by opening the inline re-auth modal and retrying.
  */
 export async function authFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  const token = authState.accessToken;
-  if (!token) {
-    return fetch(input, init);
-  }
-
-  const resp = await fetch(input, withAuthHeader(init, token));
+  const resp = await fetch(input, withCookieHeaders(init));
   if (resp.status !== 401) return resp;
 
-  const refreshed = await refreshOnce();
-  if (!refreshed || !authState.accessToken) {
-    return resp;
+  // Drain the body so the connection can close cleanly while the user
+  // sits on the modal.
+  await resp.text().catch(() => undefined);
+
+  try {
+    await triggerReauth();
+  } catch {
+    return resp; // user cancelled — let the caller handle the 401
   }
-  return fetch(input, withAuthHeader(init, authState.accessToken));
+
+  return fetch(input, withCookieHeaders(init));
 }

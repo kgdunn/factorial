@@ -1,116 +1,50 @@
 /**
- * Authentication state management using Svelte 5 runes.
+ * Authentication state for cookie-based sessions.
  *
- * Stores tokens in localStorage and provides login/register/logout functions.
+ * No tokens, no localStorage, no refresh dance. The browser carries the
+ * httpOnly session cookie automatically; the SPA tracks identity by
+ * calling ``GET /auth/me`` once at boot and after any login. ``user``
+ * is the full source of truth.
  */
 
-import { getMe, postLogin, postRefresh, postRegister } from '$lib/api/auth';
+import { getMe, postLogin, postLogout, postSetupComplete } from '$lib/api/auth';
 import type { UserProfile } from '$lib/api/auth';
 import { postInviteRegister } from '$lib/api/signup';
 
-const TOKEN_KEY = 'doe_access_token';
-const REFRESH_KEY = 'doe_refresh_token';
-const USER_KEY = 'doe_user';
-
 class AuthState {
-  accessToken = $state<string | null>(null);
-  refreshToken = $state<string | null>(null);
   user = $state<UserProfile | null>(null);
-  isAuthenticated = $derived(!!this.accessToken);
+  isAuthenticated = $derived(!!this.user);
   isLoading = $state(false);
   error = $state<string | null>(null);
+  // Tracks the very first /auth/me round-trip so the layout guard
+  // can avoid a redirect-flash on cold load.
+  bootComplete = $state(false);
 
   constructor() {
-    // Load persisted state on init (client-side only)
     if (typeof window !== 'undefined') {
-      this.accessToken = localStorage.getItem(TOKEN_KEY);
-      this.refreshToken = localStorage.getItem(REFRESH_KEY);
-      const userJson = localStorage.getItem(USER_KEY);
-      if (userJson) {
-        try {
-          this.user = JSON.parse(userJson);
-        } catch {
-          localStorage.removeItem(USER_KEY);
-        }
-      }
-      if (this.accessToken) {
-        void this.refreshUser();
-      }
+      void this.bootstrap();
+    } else {
+      this.bootComplete = true;
     }
   }
 
-  private async refreshUser(): Promise<void> {
-    if (!this.accessToken) return;
+  private async bootstrap(): Promise<void> {
     try {
-      const profile = await getMe(this.accessToken);
-      this.persistUser(profile);
+      this.user = await getMe();
     } catch {
-      // Silent fallback to cached localStorage copy; a 401 will be caught
-      // on the next authenticated request and trigger a proper logout.
+      this.user = null;
+    } finally {
+      this.bootComplete = true;
     }
-  }
-
-  private persistTokens(access: string, refresh: string) {
-    this.accessToken = access;
-    this.refreshToken = refresh;
-    localStorage.setItem(TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_KEY, refresh);
-  }
-
-  private persistUser(user: UserProfile) {
-    this.user = user;
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
   }
 
   async login(email: string, password: string): Promise<void> {
     this.isLoading = true;
     this.error = null;
     try {
-      const tokens = await postLogin(email, password);
-      this.persistTokens(tokens.access_token, tokens.refresh_token);
-      await this.hydrateUser(tokens.access_token);
+      this.user = await postLogin(email, password);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Login failed';
-      throw err;
-    } finally {
-      this.isLoading = false;
-    }
-  }
-
-  private async hydrateUser(accessToken: string): Promise<void> {
-    try {
-      this.persistUser(await getMe(accessToken));
-    } catch {
-      // Fall back to a stub derived from the JWT payload so the UI still
-      // has an identity to render; balance/is_admin will populate on retry.
-      const payload = JSON.parse(atob(accessToken.split('.')[1]));
-      this.persistUser({
-        id: payload.sub,
-        email: payload.email,
-        display_name: null,
-        background: null,
-        is_admin: false,
-        created_at: null,
-        balance_usd: null,
-        balance_tokens: null,
-      });
-    }
-  }
-
-  async register(
-    email: string,
-    password: string,
-    displayName?: string,
-    background?: string,
-  ): Promise<void> {
-    this.isLoading = true;
-    this.error = null;
-    try {
-      const tokens = await postRegister(email, password, displayName, background);
-      this.persistTokens(tokens.access_token, tokens.refresh_token);
-      await this.hydrateUser(tokens.access_token);
-    } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Registration failed';
       throw err;
     } finally {
       this.isLoading = false;
@@ -125,9 +59,7 @@ class AuthState {
     this.isLoading = true;
     this.error = null;
     try {
-      const tokens = await postInviteRegister(token, password, displayName);
-      this.persistTokens(tokens.access_token, tokens.refresh_token);
-      await this.hydrateUser(tokens.access_token);
+      this.user = await postInviteRegister(token, password, displayName);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Registration failed';
       throw err;
@@ -140,10 +72,7 @@ class AuthState {
     this.isLoading = true;
     this.error = null;
     try {
-      const { postSetupComplete } = await import('$lib/api/auth');
-      const tokens = await postSetupComplete(token, password);
-      this.persistTokens(tokens.access_token, tokens.refresh_token);
-      await this.hydrateUser(tokens.access_token);
+      this.user = await postSetupComplete(token, password);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Setup failed';
       throw err;
@@ -152,25 +81,20 @@ class AuthState {
     }
   }
 
-  async refresh(): Promise<boolean> {
-    if (!this.refreshToken) return false;
-    try {
-      const tokens = await postRefresh(this.refreshToken);
-      this.persistTokens(tokens.access_token, tokens.refresh_token);
-      return true;
-    } catch {
-      this.logout();
-      return false;
-    }
+  /**
+   * Refresh the cached user profile from /auth/me. Used after the
+   * profile page mutates anything that's mirrored on ``user``.
+   */
+  async refreshUser(): Promise<void> {
+    this.user = await getMe();
   }
 
-  logout() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.user = null;
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    localStorage.removeItem(USER_KEY);
+  async logout(): Promise<void> {
+    try {
+      await postLogout();
+    } finally {
+      this.user = null;
+    }
   }
 }
 

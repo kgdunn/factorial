@@ -12,9 +12,10 @@ from __future__ import annotations
 import contextlib
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth_cookies import set_session_cookies
 from app.api.deps import AuthUser, require_auth
 from app.api.rate_limit import limiter
 from app.config import settings
@@ -24,15 +25,10 @@ from app.schemas.auth import (
     PasswordResetCompletePayload,
     PasswordResetRequestPayload,
     PasswordResetValidateResponse,
-    TokenResponse,
+    UserResponse,
 )
-from app.services import setup_token_service
-from app.services.auth_service import (
-    create_access_token,
-    create_refresh_token,
-    hash_password,
-    verify_password,
-)
+from app.services import balance_service, session_service, setup_token_service
+from app.services.auth_service import hash_password, verify_password
 from app.services.email_service import send_setup_email
 
 logger = logging.getLogger(__name__)
@@ -74,22 +70,42 @@ async def validate_setup_token(
         return PasswordResetValidateResponse(email="", valid=False, purpose=None)
 
 
-@router.post("/setup/complete", response_model=TokenResponse)
+@router.post("/setup/complete", response_model=UserResponse)
 @limiter.limit(settings.register_rate_limit)
 async def complete_setup(
     request: Request,
+    response: Response,
     body: PasswordResetCompletePayload,
     db: AsyncSession = Depends(get_db_session),
-) -> TokenResponse:
+) -> UserResponse:
     """Set the user's password via a valid setup/reset token and log them in."""
     try:
         user = await setup_token_service.consume_token(db, body.token, body.password)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
-    return TokenResponse(
-        access_token=create_access_token(user.id, user.email),
-        refresh_token=create_refresh_token(user.id),
+    new_session = await session_service.create_session(
+        db,
+        user_id=user.id,
+        user_agent=request.headers.get("user-agent"),
+        ip=request.client.host if request.client else None,
+    )
+    set_session_cookies(
+        response,
+        session_cookie_value=new_session.cookie_value,
+        csrf_token=new_session.csrf_token,
+    )
+
+    balance = await balance_service.get_balance(db, user.id)
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        background=user.role.name if user.role_id and user.role else None,
+        is_admin=user.is_admin,
+        created_at=None,
+        balance_usd=balance.balance_usd if balance else None,
+        balance_tokens=balance.balance_tokens if balance else None,
     )
 
 

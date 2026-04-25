@@ -9,6 +9,7 @@ os.environ["APP_ENV"] = "testing"
 # so the suite stays fast. Production defaults to safe mode.
 os.environ.setdefault("TOOL_SAFE_MODE", "false")
 
+from app.api.csrf import require_csrf  # noqa: E402
 from app.api.deps import TESTING_USER_ID, AuthUser, require_api_key, require_auth  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -36,9 +37,15 @@ async def _api_key_override() -> str:
     return "testing-bypass"
 
 
-# Apply overrides so every test client skips real authentication.
+async def _csrf_override() -> None:
+    """No-op CSRF check during tests — endpoints don't need a header."""
+    return None
+
+
+# Apply overrides so every test client skips real authentication and CSRF.
 app.dependency_overrides[require_auth] = _auth_override
 app.dependency_overrides[require_api_key] = _api_key_override
+app.dependency_overrides[require_csrf] = _csrf_override
 
 
 @pytest.fixture

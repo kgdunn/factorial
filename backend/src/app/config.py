@@ -90,11 +90,23 @@ class Settings(BaseSettings):
     mcp_daily_cpu_seconds: int = 3600
     mcp_path_prefix: str = "/mcp"
 
-    # JWT Authentication
-    jwt_secret_key: str = ""
-    jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 30
-    jwt_refresh_token_expire_days: int = 7
+    # Browser session cookies.
+    # ``factorial_session`` is the httpOnly cookie carrying an opaque
+    # session id (looked up directly in the ``sessions`` table). There is
+    # no signing key in the loop, so server redeploys are
+    # session-transparent. ``factorial_csrf`` is a non-httpOnly cookie
+    # mirrored into ``X-CSRF-Token`` on state-changing requests.
+    cookie_session_idle_days: int = 30
+    cookie_session_absolute_days: int = 180
+
+    @property
+    def cookie_secure(self) -> bool:
+        """Send cookies with the ``Secure`` attribute only in production.
+
+        Dev runs over plain http://localhost; ``Secure`` would prevent
+        the cookie from being set in that case.
+        """
+        return self.app_env == "production"
 
     # SMTP Email
     smtp_host: str = ""
@@ -138,7 +150,7 @@ class Settings(BaseSettings):
     @property
     def cors_allow_headers(self) -> list[str]:
         if self.app_env == "production":
-            return ["Content-Type", "X-API-Key", "Authorization"]
+            return ["Content-Type", "X-API-Key", "X-CSRF-Token"]
         return ["*"]
 
     def validate_production_secrets(self) -> None:
@@ -152,10 +164,10 @@ class Settings(BaseSettings):
 
         problems: list[str] = []
 
-        if self.jwt_secret_key in _INSECURE_DEFAULTS:
-            problems.append("JWT_SECRET_KEY is empty or uses a default value")
         if self.api_secret_key in _INSECURE_DEFAULTS:
-            problems.append("API_SECRET_KEY is empty or uses a default value")
+            problems.append(
+                "API_SECRET_KEY is empty or uses a default value (also used to sign sqladmin sessions)",
+            )
         if self.postgres_password in _INSECURE_DEFAULTS:
             problems.append("POSTGRES_PASSWORD uses a weak default value")
         if self.neo4j_password in _INSECURE_DEFAULTS:

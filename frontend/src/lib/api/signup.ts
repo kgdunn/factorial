@@ -2,7 +2,7 @@
  * REST API client for signup request and invite endpoints.
  */
 
-import type { TokenResponse } from './auth';
+import type { UserProfile } from './auth';
 import { authFetch } from './client';
 
 export interface SignupSubmitResponse {
@@ -90,12 +90,13 @@ export async function postInviteRegister(
   token: string,
   password: string,
   displayName?: string,
-): Promise<TokenResponse> {
+): Promise<UserProfile> {
   const body: Record<string, string> = { token, password };
   if (displayName) body.display_name = displayName;
 
   const resp = await fetch('/api/v1/signup/invite/register', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
