@@ -11,6 +11,8 @@ For frontend UI/UX spec (pages, components, streaming protocol), see `docs/front
 For VPS deployment guide, see `docs/deployment/vps-guide.md`.
 Documentation is built with MkDocs and deployed to GitHub Pages.
 
+**Factorial is mobile-native.** Mobile browsers are first-class citizens for every UI change and improvement — design, build, and test for mobile (touch targets, viewport sizing, responsive layouts, performance on cellular networks) on equal footing with desktop. A change that looks fine on desktop but degrades the mobile experience is not acceptable; verify both before considering UI work complete.
+
 ## Tech Stack
 
 | Layer | Technology |
