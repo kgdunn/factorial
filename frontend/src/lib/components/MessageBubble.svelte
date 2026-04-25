@@ -2,6 +2,8 @@
   import { marked } from 'marked';
   import DOMPurify from 'dompurify';
   import type { ChatMessage } from '$lib/types';
+  import { chatState } from '$lib/state/chat.svelte';
+  import PlanChecklist from './PlanChecklist.svelte';
   import ToolResultCard from './ToolResultCard.svelte';
 
   interface Props {
@@ -25,6 +27,11 @@
 
   let isUser = $derived(message.role === 'user');
   let showCursor = $derived(isLastAssistant && isStreaming);
+
+  /** Tool names that exist purely as plan-metadata channels and must
+   *  never render as tool-call cards (the SSE stream suppresses them
+   *  but a REST-loaded conversation history still has the rows). */
+  const META_TOOL_NAMES = new Set(['record_plan', 'update_plan']);
 </script>
 
 <div class="mb-5 flex gap-3.5 {isUser ? 'flex-row-reverse' : ''}">
@@ -67,8 +74,14 @@
             {@html renderMarkdown(block.text)}
           </div>
         {/if}
+      {:else if block.type === 'plan'}
+        <PlanChecklist
+          plan={block}
+          currentPhase={isLastAssistant && isStreaming ? chatState.currentPhase : null}
+          isStreaming={isLastAssistant && isStreaming}
+        />
       {:else if block.type === 'tool_use'}
-        {#if block.isLoading}
+        {#if block.isLoading && !META_TOOL_NAMES.has(block.name)}
           <div class="my-2 flex items-center gap-2 font-mono text-xs text-ink-faint">
             <div
               class="h-3.5 w-3.5 animate-spin rounded-full border-2 border-clay border-t-transparent"
@@ -77,18 +90,20 @@
           </div>
         {/if}
       {:else if block.type === 'tool_result'}
-        <ToolResultCard
-          toolName={block.toolName}
-          input={(() => {
-            const toolUse = message.content.find(
-              (b) => b.type === 'tool_use' && b.id === block.toolUseId,
-            );
-            return toolUse?.type === 'tool_use' ? toolUse.input : {};
-          })()}
-          output={block.output}
-          isLoading={false}
-          isError={block.isError}
-        />
+        {#if !META_TOOL_NAMES.has(block.toolName)}
+          <ToolResultCard
+            toolName={block.toolName}
+            input={(() => {
+              const toolUse = message.content.find(
+                (b) => b.type === 'tool_use' && b.id === block.toolUseId,
+              );
+              return toolUse?.type === 'tool_use' ? toolUse.input : {};
+            })()}
+            output={block.output}
+            isLoading={false}
+            isError={block.isError}
+          />
+        {/if}
       {/if}
     {/each}
 
