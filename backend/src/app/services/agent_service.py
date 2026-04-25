@@ -17,6 +17,7 @@ import json
 import logging
 import queue
 import re
+import time
 import uuid
 from collections.abc import AsyncGenerator
 from decimal import Decimal
@@ -42,6 +43,13 @@ from app.services.simulator_service import (
     set_reveal_request_count,
 )
 from app.services.tools import get_tool_specs
+from app.services.turn_timing import TurnTimer
+
+# Coalesce token-delta SSE events into a single chat_events row when the
+# buffer is older than this many seconds. Live SSE delivery is unchanged
+# — the client still receives one event per delta — only persistence is
+# batched, dropping per-turn DB round-trips from O(tokens) to O(phases).
+_TOKEN_BATCH_INTERVAL_S = 0.25
 
 logger = logging.getLogger(__name__)
 
@@ -492,69 +500,124 @@ async def run_chat(
     # scope its replay cleanly.
     turn_id = uuid.uuid4()
     event_seq = 0
+    timer = TurnTimer(conversation_id=conversation_id, turn_id=turn_id)
+    turn_status = "ok"
+    agent_turns_seen = 0
+
+    # Token-batch state. Tokens accumulate here and are flushed as a
+    # single ``chat_events`` row when (a) a non-token event arrives,
+    # (b) the buffer is older than ``_TOKEN_BATCH_INTERVAL_S``, or
+    # (c) the generator is finalizing. Live SSE delivery is unchanged.
+    token_buf: list[str] = []
+    token_buf_first_seq: int | None = None
+    token_buf_last_seq: int | None = None
+    token_buf_started_at: float = 0.0
 
     async with async_session_factory() as db:
+        # ``conversation`` is forward-declared so the closures below can
+        # close over it before ``load_history`` assigns it. Until then,
+        # the closures short-circuit on the ``None`` check — required so
+        # the ``finally`` flush is safe even when an early return fires
+        # before history loading completes.
+        conversation: Conversation | None = None
+
+        async def flush_token_buffer() -> None:
+            """Persist the accumulated token batch as one chat_events row."""
+            nonlocal token_buf_first_seq, token_buf_last_seq, token_buf_started_at
+            if not token_buf or token_buf_last_seq is None or conversation is None:
+                return
+            batched_count = len(token_buf)
+            batched_text = "".join(token_buf)
+            flush_started = time.perf_counter()
+            await _persist_chat_event(
+                conversation.id,
+                turn_id,
+                token_buf_last_seq,
+                "token",
+                {"text": batched_text},
+            )
+            timer.event(
+                "persist_chat_event_batch",
+                duration_ms=int((time.perf_counter() - flush_started) * 1000),
+                batched_count=batched_count,
+                bytes=len(batched_text),
+            )
+            token_buf.clear()
+            token_buf_first_seq = None
+            token_buf_last_seq = None
+            token_buf_started_at = 0.0
+
+        async def emit(event_type: str, data: dict[str, Any]) -> ServerSentEvent:
+            """Assign the next sequence and stream + persist (token deltas batched)."""
+            nonlocal event_seq, token_buf_first_seq, token_buf_last_seq, token_buf_started_at
+            event_seq += 1
+            if event_type == "token" and conversation is not None:
+                token_buf.append(data.get("text", ""))
+                if token_buf_first_seq is None:
+                    token_buf_first_seq = event_seq
+                    token_buf_started_at = time.monotonic()
+                token_buf_last_seq = event_seq
+            elif conversation is not None:
+                await flush_token_buffer()
+                await _persist_chat_event(conversation.id, turn_id, event_seq, event_type, data)
+            return _sse(event_type, data, event_id=f"{turn_id}:{event_seq}")
+
         try:
             # 1. Load or create conversation.
-            if conversation_id:
-                conversation = await db.get(Conversation, conversation_id)
-                if not conversation:
-                    # Pre-conversation error — nothing to persist into
-                    # ``chat_events``; client can't resume a turn that
-                    # never existed.
-                    yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
-                    return
-                if conversation.user_id != user_id:
-                    yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
-                    return
-                result = await db.execute(
-                    select(Message).where(Message.conversation_id == conversation_id).order_by(Message.sequence)
-                )
-                history_rows = list(result.scalars().all())
-                api_messages = _build_messages_from_history(history_rows)
-                next_seq = (history_rows[-1].sequence + 1) if history_rows else 1
-            else:
-                conversation = Conversation(
-                    title=message[:100],
-                    model_key=settings.anthropic_model,
-                    system_prompt=system_prompt,
-                    user_id=user_id,
-                    total_input_tokens=0,
-                    total_output_tokens=0,
-                    message_count=0,
-                )
-                db.add(conversation)
-                await db.flush()
-                api_messages = []
-                next_seq = 1
+            with timer.phase("load_history") as scratch:
+                if conversation_id:
+                    conversation = await db.get(Conversation, conversation_id)
+                    if not conversation:
+                        # Pre-conversation error — nothing to persist into
+                        # ``chat_events``; client can't resume a turn that
+                        # never existed.
+                        yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
+                        return
+                    if conversation.user_id != user_id:
+                        yield _sse("error", {"message": f"Conversation {conversation_id} not found."})
+                        return
+                    result = await db.execute(
+                        select(Message).where(Message.conversation_id == conversation_id).order_by(Message.sequence)
+                    )
+                    history_rows = list(result.scalars().all())
+                    api_messages = _build_messages_from_history(history_rows)
+                    next_seq = (history_rows[-1].sequence + 1) if history_rows else 1
+                    scratch["history_rows"] = len(history_rows)
+                else:
+                    conversation = Conversation(
+                        title=message[:100],
+                        model_key=settings.anthropic_model,
+                        system_prompt=system_prompt,
+                        user_id=user_id,
+                        total_input_tokens=0,
+                        total_output_tokens=0,
+                        message_count=0,
+                    )
+                    db.add(conversation)
+                    await db.flush()
+                    api_messages = []
+                    next_seq = 1
+                    scratch["history_rows"] = 0
 
             # 2. Persist the user message. Committed eagerly so that
             #    (a) the user's turn is durable even if the agent loop
             #    later crashes, and (b) ``chat_events`` rows written
             #    from their own sessions below can satisfy the FK to
             #    ``conversations.id``.
-            user_msg = Message(
-                conversation_id=conversation.id,
-                role="user",
-                content=message,
-                sequence=next_seq,
-            )
-            db.add(user_msg)
-            conversation.message_count = (conversation.message_count or 0) + 1
-            await db.commit()
-            next_seq += 1
+            with timer.phase("persist_user_message"):
+                user_msg = Message(
+                    conversation_id=conversation.id,
+                    role="user",
+                    content=message,
+                    sequence=next_seq,
+                )
+                db.add(user_msg)
+                conversation.message_count = (conversation.message_count or 0) + 1
+                await db.commit()
+                next_seq += 1
 
             # 3. Append user message to API history.
             api_messages.append({"role": "user", "content": message})
-
-            # Helper that assigns the next sequence, persists the event
-            # to ``chat_events`` in a side session, and returns the
-            # ``ServerSentEvent`` ready to yield.
-            async def emit(event_type: str, data: dict[str, Any]) -> ServerSentEvent:
-                nonlocal event_seq
-                event_seq += 1
-                await _persist_chat_event(conversation.id, turn_id, event_seq, event_type, data)
-                return _sse(event_type, data, event_id=f"{turn_id}:{event_seq}")
 
             # 4. Emit conversation_id + the turn_id so the frontend can
             #    construct a resume URL without guessing.
@@ -597,74 +660,78 @@ async def run_chat(
                 reveal_counts,
                 newly_created_sims,
                 settings.simulator_reveal_force,
+                timer,
             )
 
-            # 6. Stream SSE events from the queue — persist each one
-            #    before yielding so the resume log is always at least as
-            #    advanced as what the client has received.
+            # 6. Stream SSE events from the queue. Token deltas are
+            #    coalesced inside ``emit`` so the live client still sees
+            #    one event per delta but persistence happens in batches.
             async for sse_event in _stream_from_queue(event_queue):
                 payload = json.loads(sse_event.data) if sse_event.data else {}
                 yield await emit(sse_event.event or "message", payload)
+                if (
+                    token_buf
+                    and token_buf_started_at
+                    and (time.monotonic() - token_buf_started_at) > _TOKEN_BATCH_INTERVAL_S
+                ):
+                    await flush_token_buffer()
 
             # 7. Await the thread result.
             loop_result = await future
+            tool_records = loop_result.get("tool_call_records", [])
+            agent_turns_seen = max((rec.get("agent_turn") or 0) for rec in tool_records) if tool_records else 0
 
-            # 8. Persist assistant messages + tool call audit rows.
-            new_messages = loop_result.get("new_messages", [])
-            tool_call_records = loop_result.get("tool_call_records", [])
+            # 8. Persist assistant messages, tool-call audit rows, and any
+            #    auto-created experiments / simulators in one timed phase.
+            with timer.phase("persist_assistant"):
+                new_messages = loop_result.get("new_messages", [])
+                tool_call_records = loop_result.get("tool_call_records", [])
 
-            tool_use_id_map = await _persist_new_messages(db, conversation, new_messages, next_seq)
-            await _persist_tool_calls(db, conversation.id, tool_call_records, tool_use_id_map)
+                tool_use_id_map = await _persist_new_messages(db, conversation, new_messages, next_seq)
+                await _persist_tool_calls(db, conversation.id, tool_call_records, tool_use_id_map)
 
-            # 9. Auto-create experiments for successful generate_design calls,
-            #    and attach evaluate_design output to the most recent
-            #    experiment in this conversation.
-            created_experiments: list[Any] = []
-            for rec in tool_call_records:
-                if rec.get("status") != "success":
-                    continue
-                if rec["tool_name"] == "generate_design":
-                    experiment = await _create_experiment_from_design(
-                        db, rec["tool_output"], conversation.id, user_id=user_id
+                created_experiments: list[Any] = []
+                for rec in tool_call_records:
+                    if rec.get("status") != "success":
+                        continue
+                    if rec["tool_name"] == "generate_design":
+                        experiment = await _create_experiment_from_design(
+                            db, rec["tool_output"], conversation.id, user_id=user_id
+                        )
+                        created_experiments.append(experiment)
+                    elif rec["tool_name"] == "evaluate_design":
+                        target = created_experiments[-1] if created_experiments else None
+                        if target is None:
+                            target = await get_latest_experiment_for_conversation(db, conversation.id)
+                        if target is not None:
+                            target.evaluation_data = rec["tool_output"]
+
+                created_sim_rows = []
+                for sim_info in newly_created_sims:
+                    row = await create_simulator_record(
+                        db,
+                        sim_id=sim_info["sim_id"],
+                        public_summary=sim_info["public_summary"],
+                        private_state=sim_info["private_state"],
+                        user_id=user_id,
+                        conversation_id=conversation.id,
                     )
-                    created_experiments.append(experiment)
-                elif rec["tool_name"] == "evaluate_design":
-                    target = created_experiments[-1] if created_experiments else None
-                    if target is None:
-                        target = await get_latest_experiment_for_conversation(db, conversation.id)
-                    if target is not None:
-                        target.evaluation_data = rec["tool_output"]
+                    created_sim_rows.append(row)
 
-            # Persist newly-created simulators and refresh reveal counts on
-            # pre-existing ones so the double-confirm gate carries across
-            # turns in the same conversation.
-            created_sim_rows = []
-            for sim_info in newly_created_sims:
-                row = await create_simulator_record(
-                    db,
-                    sim_id=sim_info["sim_id"],
-                    public_summary=sim_info["public_summary"],
-                    private_state=sim_info["private_state"],
-                    user_id=user_id,
-                    conversation_id=conversation.id,
-                )
-                created_sim_rows.append(row)
+                existing_by_id = {sim.sim_id: sim for sim in existing_sims}
+                for sim_id, count in reveal_counts.items():
+                    prev = existing_by_id.get(sim_id)
+                    if prev is not None and int(prev.reveal_request_count) != count:
+                        await set_reveal_request_count(db, sim_id, user_id, count)
 
-            existing_by_id = {sim.sim_id: sim for sim in existing_sims}
-            for sim_id, count in reveal_counts.items():
-                prev = existing_by_id.get(sim_id)
-                if prev is not None and int(prev.reveal_request_count) != count:
-                    await set_reveal_request_count(db, sim_id, user_id, count)
+                msg_count = len(new_messages)
+                for m in new_messages:
+                    content = m.get("content", [])
+                    if isinstance(content, list):
+                        msg_count += len(content) - 1  # each block is a row
+                conversation.message_count = (conversation.message_count or 0) + msg_count
 
-            # Update cached message count.
-            msg_count = len(new_messages)
-            for m in new_messages:
-                content = m.get("content", [])
-                if isinstance(content, list):
-                    msg_count += len(content) - 1  # each block is a row
-            conversation.message_count = (conversation.message_count or 0) + msg_count
-
-            await db.commit()
+                await db.commit()
 
             # 10. Emit experiment_created events (after commit, so IDs are stable).
             for experiment in created_experiments:
@@ -688,6 +755,7 @@ async def run_chat(
                 )
 
         except Exception:
+            turn_status = "error"
             logger.exception("run_chat failed")
             await db.rollback()
             # Attempt a persisted error event so a reconnecting client
@@ -696,3 +764,14 @@ async def run_chat(
                 yield await emit("error", {"message": "Internal server error."})
             except Exception:
                 yield _sse("error", {"message": "Internal server error."})
+        finally:
+            try:
+                await flush_token_buffer()
+            except Exception:
+                logger.exception("Final token-buffer flush failed")
+            timer.event(
+                "turn_total",
+                duration_ms=timer.elapsed_ms(),
+                status=turn_status,
+                agent_turns=agent_turns_seen,
+            )
