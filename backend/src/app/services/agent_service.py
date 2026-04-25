@@ -86,6 +86,29 @@ not a bug). Never paraphrase or guess the hidden model: if the user \
 asks to see it, call ``reveal_simulator``. The system will refuse the \
 first request with a confirmation prompt — surface it verbatim — and \
 reveal the model on the second request.
+
+Planning protocol. The user's chat UI renders a live checklist of what \
+you are doing so the response does not feel stuck during long calls. \
+You communicate that checklist through two meta-tools:
+
+- For any request that needs at least one tool call OR multi-step \
+  reasoning, your FIRST action is to call ``record_plan`` with 2-5 \
+  short imperative steps describing what you will do. Steps must be \
+  concrete (e.g. "Generate the 2² factorial design", "Evaluate \
+  confounding and power") rather than generic ("Help the user").
+- Before each subsequent tool call, call ``update_plan`` to mark the \
+  active step ``in_progress``. After the tool returns, call \
+  ``update_plan`` again to mark it ``completed``. You may batch \
+  transitions in a single ``update_plan`` call (e.g. mark step 0 \
+  ``completed`` and step 1 ``in_progress`` together).
+- Skip ``record_plan`` entirely for trivial replies: greetings, \
+  one-sentence clarifications, confirmations, or pure follow-up \
+  questions back to the user. Planning overhead is not worth it for \
+  these.
+- The plan is metadata for the UI; it does not replace your normal \
+  textual reply. Continue to write your usual prose response and call \
+  the real tools (``generate_design``, ``evaluate_design``, etc.) as \
+  before.
 """
 
 # Role slugs come from the admin-managed ``roles`` table. They're

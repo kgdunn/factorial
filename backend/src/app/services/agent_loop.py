@@ -22,7 +22,19 @@ from app.services import pricing
 from app.services.anthropic_status import status_tracker
 from app.services.exceptions import ToolExecutionError
 from app.services.simulator_interception import RevealCounts, SimulatorStates, post_dispatch, pre_dispatch
-from app.services.tools import execute_tool_call
+from app.services.tools import execute_tool_call, is_local_tool
+
+# Pretty labels for the ``phase`` event's ``label`` field. Keep in sync
+# with the Anthropic-format tool specs returned by ``get_tool_specs``.
+_TOOL_LABELS: dict[str, str] = {
+    "generate_design": "Design Matrix",
+    "evaluate_design": "Design Evaluation",
+    "analyze_results": "Result Analysis",
+    "create_simulator": "Simulator Setup",
+    "simulate_process": "Process Simulation",
+    "reveal_simulator": "Simulator Reveal",
+    "visualize_doe": "Visualization",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +84,23 @@ def _run_agent_loop(  # noqa: PLR0913
     new_messages: list[dict[str, Any]] = []
     tool_call_records: list[dict[str, Any]] = []
     agent_turn = 0
+    # Tracks the most recent ``record_plan`` invocation so subsequent
+    # ``update_plan`` events can be tagged with the same ``plan_id``.
+    current_plan_id: str | None = None
 
     try:
         while agent_turn < MAX_AGENT_TURNS:
             agent_turn += 1
             turn_start = time.perf_counter()
+
+            # Phase: model is "thinking" — covers the API round-trip
+            # before the first text token arrives.
+            event_queue.put(
+                (
+                    "phase",
+                    {"phase": "thinking", "turn": agent_turn, "max_turns": MAX_AGENT_TURNS},
+                )
+            )
 
             # --- Stream the API call ---
             with client.messages.stream(
@@ -87,8 +111,17 @@ def _run_agent_loop(  # noqa: PLR0913
                 tools=tool_specs,
             ) as stream:
                 text_parts: list[str] = []
+                streaming_phase_emitted = False
                 for event in stream:
                     if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                        if not streaming_phase_emitted:
+                            event_queue.put(
+                                (
+                                    "phase",
+                                    {"phase": "streaming", "turn": agent_turn, "max_turns": MAX_AGENT_TURNS},
+                                )
+                            )
+                            streaming_phase_emitted = True
                         event_queue.put(("token", {"text": event.delta.text}))
                         text_parts.append(event.delta.text)
 
@@ -133,13 +166,46 @@ def _run_agent_loop(  # noqa: PLR0913
             tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
 
             if response.stop_reason != "tool_use" or not tool_use_blocks:
+                event_queue.put(("phase", {"phase": "finalizing"}))
                 event_queue.put(("done", {}))
                 break
 
             # --- Execute each tool call ---
             tool_results: list[dict[str, Any]] = []
             for call_order, tool_block in enumerate(tool_use_blocks, start=1):
-                event_queue.put(("tool_start", {"tool": tool_block.name, "input": tool_block.input}))
+                # Meta tools (record_plan / update_plan) are translated
+                # into ``plan`` / ``plan_update`` SSE events instead of
+                # the usual ``tool_start`` / ``tool_result`` pair so the
+                # frontend can render them as inline plan UI rather than
+                # tool-call cards.
+                if is_local_tool(tool_block.name):
+                    if tool_block.name == "record_plan":
+                        plan_id = uuid.uuid4().hex
+                        current_plan_id = plan_id
+                        steps = tool_block.input.get("steps", []) if isinstance(tool_block.input, dict) else []
+                        event_queue.put(("plan", {"plan_id": plan_id, "steps": steps}))
+                    elif tool_block.name == "update_plan":
+                        updates = tool_block.input.get("updates", []) if isinstance(tool_block.input, dict) else []
+                        event_queue.put(
+                            (
+                                "plan_update",
+                                {"plan_id": current_plan_id, "updates": updates},
+                            )
+                        )
+                else:
+                    event_queue.put(
+                        (
+                            "phase",
+                            {
+                                "phase": "calling_tool",
+                                "tool": tool_block.name,
+                                "label": _TOOL_LABELS.get(tool_block.name, tool_block.name),
+                                "turn": agent_turn,
+                                "max_turns": MAX_AGENT_TURNS,
+                            },
+                        )
+                    )
+                    event_queue.put(("tool_start", {"tool": tool_block.name, "input": tool_block.input}))
 
                 input_bytes = len(json.dumps(tool_block.input, default=str).encode("utf-8"))
                 record: dict[str, Any] = {
@@ -184,7 +250,8 @@ def _run_agent_loop(  # noqa: PLR0913
                         }
                     )
 
-                    event_queue.put(("tool_result", {"tool": tool_block.name, "output": result}))
+                    if not is_local_tool(tool_block.name):
+                        event_queue.put(("tool_result", {"tool": tool_block.name, "output": result}))
                     tool_results.append(
                         {
                             "type": "tool_result",
@@ -204,15 +271,16 @@ def _run_agent_loop(  # noqa: PLR0913
                         }
                     )
 
-                    event_queue.put(
-                        (
-                            "tool_result",
-                            {
-                                "tool": tool_block.name,
-                                "output": {"error": exc.message},
-                            },
+                    if not is_local_tool(tool_block.name):
+                        event_queue.put(
+                            (
+                                "tool_result",
+                                {
+                                    "tool": tool_block.name,
+                                    "output": {"error": exc.message},
+                                },
+                            )
                         )
-                    )
                     tool_results.append(
                         {
                             "type": "tool_result",
