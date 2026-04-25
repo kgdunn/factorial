@@ -56,8 +56,121 @@ from app.services.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-# Build an allowlist of valid tool names at import time.
-_ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(spec["name"] for spec in _pi_get_specs() if "name" in spec)
+# ---------------------------------------------------------------------------
+# Local "meta" tools — record_plan / update_plan
+# ---------------------------------------------------------------------------
+#
+# These are app-level virtual tools that exist purely to give the model a
+# structured channel for emitting plan metadata to the frontend. They never
+# execute real work and bypass the subprocess sandbox. The agent loop
+# recognises their names and translates the calls into ``plan`` /
+# ``plan_update`` SSE events; the no-op result keeps the Anthropic
+# tool_use ↔ tool_result pairing valid.
+
+_LOCAL_TOOL_SPECS: list[dict[str, Any]] = [
+    {
+        "name": "record_plan",
+        "category": "meta",
+        "description": (
+            "Record an upfront plan for the user's current request. Call this as your "
+            "FIRST action whenever the request needs a tool call or multi-step reasoning. "
+            "Each step should be a short imperative phrase describing one concrete action "
+            "you will take (e.g. 'Generate the 2² factorial design', 'Evaluate confounding'). "
+            "Use 2 to 5 steps. The plan is shown to the user as a live checklist; you must "
+            "still call update_plan to mark progress as you work."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "steps": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1, "maxLength": 200},
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "description": "Ordered list of short imperative steps.",
+                },
+            },
+            "required": ["steps"],
+        },
+    },
+    {
+        "name": "update_plan",
+        "category": "meta",
+        "description": (
+            "Mark one or more plan steps as in_progress, completed, or skipped. "
+            "Call this before each tool use to mark the relevant step in_progress, "
+            "and after the tool returns to mark it completed. You may batch "
+            "transitions (e.g. mark step 0 completed and step 1 in_progress in one call)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "updates": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "step_index": {"type": "integer", "minimum": 0},
+                            "status": {
+                                "type": "string",
+                                "enum": ["pending", "in_progress", "completed", "skipped"],
+                            },
+                            "note": {"type": "string", "maxLength": 200},
+                        },
+                        "required": ["step_index", "status"],
+                    },
+                },
+            },
+            "required": ["updates"],
+        },
+    },
+]
+
+_LOCAL_TOOL_NAMES: frozenset[str] = frozenset(spec["name"] for spec in _LOCAL_TOOL_SPECS)
+
+# Build an allowlist of valid tool names at import time. Includes both the
+# upstream process_improve tools and our local meta tools.
+_ALLOWED_TOOL_NAMES: frozenset[str] = (
+    frozenset(spec["name"] for spec in _pi_get_specs() if "name" in spec) | _LOCAL_TOOL_NAMES
+)
+
+
+def is_local_tool(tool_name: str) -> bool:
+    """Return True for app-level meta tools that bypass the subprocess sandbox."""
+    return tool_name in _LOCAL_TOOL_NAMES
+
+
+def _execute_local_tool(tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any]:
+    """Validate and acknowledge a local meta-tool call. No real work is done."""
+    if tool_name == "record_plan":
+        steps = tool_input.get("steps")
+        if not isinstance(steps, list) or not steps or not all(isinstance(s, str) and s.strip() for s in steps):
+            raise ToolExecutionError(
+                "record_plan requires a non-empty list of non-empty string steps.",
+                tool_name=tool_name,
+            )
+    elif tool_name == "update_plan":
+        updates = tool_input.get("updates")
+        if not isinstance(updates, list) or not updates:
+            raise ToolExecutionError(
+                "update_plan requires a non-empty list of update objects.",
+                tool_name=tool_name,
+            )
+        for upd in updates:
+            if not isinstance(upd, dict):
+                raise ToolExecutionError("update_plan update must be an object.", tool_name=tool_name)
+            if not isinstance(upd.get("step_index"), int) or upd["step_index"] < 0:
+                raise ToolExecutionError(
+                    "update_plan: step_index must be a non-negative integer.",
+                    tool_name=tool_name,
+                )
+            if upd.get("status") not in {"pending", "in_progress", "completed", "skipped"}:
+                raise ToolExecutionError(
+                    "update_plan: status must be pending|in_progress|completed|skipped.",
+                    tool_name=tool_name,
+                )
+    return {"acknowledged": True}
 
 
 def get_tool_specs(
@@ -66,14 +179,29 @@ def get_tool_specs(
 ) -> list[dict[str, Any]]:
     """Return tool specs in Anthropic API format.
 
+    Combines upstream ``process_improve`` tool specs with the app-level
+    meta tools (``record_plan``, ``update_plan``).
+
     Parameters
     ----------
     names:
         Optional allow-list of tool names.
     category:
-        Optional category filter (e.g. ``"experiments"``).
+        Optional category filter (e.g. ``"experiments"``). Pass ``"meta"``
+        to get only the local plan tools.
     """
-    return _pi_get_specs(names=names, category=category)
+    upstream = _pi_get_specs(names=names, category=category)
+
+    # Filter local specs by the same name/category constraints.
+    local: list[dict[str, Any]] = []
+    for spec in _LOCAL_TOOL_SPECS:
+        if names is not None and spec["name"] not in names:
+            continue
+        if category is not None and spec.get("category") != category:
+            continue
+        local.append(spec)
+
+    return list(upstream) + local
 
 
 def _translate_safety_error(exc: _PISafetyError, tool_name: str) -> ToolExecutionError:
@@ -138,6 +266,11 @@ def execute_tool_call(
             f"Tool input must be a dict, got {type(tool_input).__name__}",
             tool_name=tool_name,
         )
+
+    # Local meta tools (record_plan, update_plan) never go through the
+    # subprocess sandbox — they only carry plan metadata for the UI.
+    if tool_name in _LOCAL_TOOL_NAMES:
+        return _execute_local_tool(tool_name, tool_input)
 
     effective_safe_mode = settings.tool_safe_mode if safe_mode is None else safe_mode
 
