@@ -6,7 +6,7 @@ Create Date: 2026-04-18
 
 Creates the full application schema in a single revision: roles, users,
 signup_requests, setup_tokens, conversations, messages, tool_calls,
-experiments, and experiment_shares. The eight built-in roles are seeded
+experiments, and experiment_shares. The seven built-in roles are seeded
 at the end of ``upgrade``.
 """
 
@@ -30,7 +30,6 @@ _BUILTIN_ROLES: list[tuple[str, str]] = [
     ("quality_engineer", "Quality engineer"),
     ("data_scientist", "Data scientist"),
     ("student", "Student"),
-    ("other", "Other / not listed"),
 ]
 
 
