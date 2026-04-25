@@ -32,6 +32,14 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[bytes] = mapped_column(LargeBinary(32), primary_key=True)
+    # Non-secret identifier exposed on /auth/sessions and accepted by
+    # DELETE /auth/sessions/{public_id}. Never use ``id`` for that — it
+    # is the credential.
+    public_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        unique=True,
+        server_default=func.gen_random_uuid(),
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),

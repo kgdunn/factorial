@@ -145,6 +145,29 @@ async def revoke_session(db: AsyncSession, session_id: bytes) -> None:
     )
 
 
+async def revoke_by_public_id(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    public_id: uuid.UUID,
+) -> bool:
+    """Revoke one of a user's own sessions by its public id.
+
+    Scoped to ``user_id`` so a user can never revoke another user's
+    session. Returns True iff a row was revoked.
+    """
+    result = await db.execute(
+        update(Session)
+        .where(
+            Session.public_id == public_id,
+            Session.user_id == user_id,
+            Session.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(UTC)),
+    )
+    return (result.rowcount or 0) > 0
+
+
 async def revoke_family(db: AsyncSession, family_id: uuid.UUID) -> int:
     """Revoke every active session in a family. Returns rows affected."""
     result = await db.execute(

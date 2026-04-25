@@ -26,6 +26,13 @@ def upgrade() -> None:
         "sessions",
         sa.Column("id", sa.LargeBinary(32), primary_key=True),
         sa.Column(
+            "public_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=False,
+            unique=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
             "user_id",
             postgresql.UUID(as_uuid=True),
             sa.ForeignKey("users.id", ondelete="CASCADE"),

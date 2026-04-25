@@ -30,18 +30,19 @@ class LoginRequest(BaseModel):
     timezone: str | None = Field(None, max_length=64)
 
 
-class TokenResponse(BaseModel):
-    """JWT token pair returned on login/register."""
+class SessionResponse(BaseModel):
+    """Per-session metadata for the active-sessions list.
 
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
+    ``public_id`` is the non-secret revocation handle. The credential
+    bytes never leave the server.
+    """
 
-
-class RefreshRequest(BaseModel):
-    """Refresh token exchange payload."""
-
-    refresh_token: str
+    public_id: uuid.UUID
+    created_at: datetime
+    last_used_at: datetime
+    user_agent: str | None
+    ip: str | None
+    is_current: bool
 
 
 class UserResponse(BaseModel):
