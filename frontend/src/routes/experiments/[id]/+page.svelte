@@ -171,13 +171,16 @@
                 </button>
               </div>
             {:else}
-              <h1
-                class="text-2xl font-bold text-gray-800 cursor-pointer hover:text-primary transition-colors"
+              <button
+                type="button"
+                class="cursor-pointer text-left transition-colors"
                 onclick={startEditName}
                 title="Click to edit"
               >
-                {exp.name}
-              </h1>
+                <h1 class="text-2xl font-bold text-gray-800 hover:text-primary">
+                  {exp.name}
+                </h1>
+              </button>
             {/if}
 
             <div class="mt-2 flex items-center gap-4 text-sm text-gray-500">

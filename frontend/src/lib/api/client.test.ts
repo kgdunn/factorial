@@ -4,7 +4,7 @@
  * spurious "401" errors when their 30-minute access token expires
  * while the page is still open.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { authFetch } from './client';
 import { authState } from '$lib/state/auth.svelte';
@@ -17,7 +17,7 @@ function jsonResp(body: unknown, status = 200): Response {
 }
 
 describe('authFetch', () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  let fetchSpy: MockInstance<typeof globalThis.fetch>;
 
   beforeEach(() => {
     authState.accessToken = 'old-token';
