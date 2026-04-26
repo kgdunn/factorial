@@ -82,9 +82,15 @@ format:
 	cd backend && uv run --extra dev ruff check --fix src/ tests/
 	cd backend && uv run --extra dev ruff format src/ tests/
 
+# Readiness probe runs inside the postgres-test container so the host
+# does not need postgresql-client installed (deploy hosts typically
+# don't). If the container is not running, `docker compose exec` exits
+# non-zero and we print the same hint as before.
 test:
-	@pg_isready -h $${POSTGRES_TEST_HOST:-localhost} -p $${POSTGRES_TEST_PORT:-5433} -q || { \
-	    echo "ERROR: test Postgres is not reachable on $${POSTGRES_TEST_HOST:-localhost}:$${POSTGRES_TEST_PORT:-5433}."; \
+	@docker compose exec -T postgres-test pg_isready -q \
+	    -U $${POSTGRES_TEST_USER:-doe_user} \
+	    -d $${POSTGRES_TEST_DB:-doe_test_db} >/dev/null 2>&1 || { \
+	    echo "ERROR: test Postgres is not reachable via the postgres-test container."; \
 	    echo "Start it with:  docker compose up -d postgres-test"; \
 	    echo "(See docs/development/testing-database.md for the full workflow.)"; \
 	    exit 1; \
@@ -129,10 +135,29 @@ deploy: deploy-preflight deploy-up deploy-migrate
 deploy-preflight:
 	@echo "==> Checking .env file..."
 	@test -f .env || { echo "ERROR: .env not found. Run: cp .env.example .env  and configure it."; exit 1; }
+	@echo "==> Verifying .env contains every key from .env.example..."
+	@sh ./scripts/check-env-keys.sh
 	@echo "==> Installing dependencies..."
 	@$(MAKE) install
 	@echo "==> Running lint checks..."
 	@$(MAKE) lint
+	@echo "==> Starting test database (postgres-test container)..."
+	docker compose up -d postgres-test
+	@echo "==> Waiting for test database to be ready..."
+	@for i in $$(seq 1 30); do \
+	    if docker compose exec -T postgres-test pg_isready -q \
+	        -U $${POSTGRES_TEST_USER:-doe_user} \
+	        -d $${POSTGRES_TEST_DB:-doe_test_db} >/dev/null 2>&1; then \
+	        echo "    test database is ready."; \
+	        break; \
+	    fi; \
+	    if [ $$i -eq 30 ]; then \
+	        echo "ERROR: postgres-test did not become ready within 30s."; \
+	        echo "Check:  docker compose logs postgres-test"; \
+	        exit 1; \
+	    fi; \
+	    sleep 1; \
+	done
 	@echo "==> Running tests..."
 	@$(MAKE) test
 
