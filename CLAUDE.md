@@ -177,7 +177,7 @@ This is load-bearing: short-circuiting the walkthrough defeats the whole point o
 
 ### Testing
 
-- **Backend**: Set `APP_ENV=testing` to skip database connectivity checks. Tests do NOT require running PostgreSQL or Neo4j.
+- **Backend**: `APP_ENV=testing` skips the Neo4j connectivity check at startup, but the suite **does** require a running test Postgres on port 5433 (`docker compose up -d postgres-test`). The conftest runs `alembic upgrade head` against it and wraps each test in a rolled-back transaction. See `docs/development/testing-database.md`.
 - **Frontend**: vitest for unit tests, Playwright for E2E (when added)
 - Run backend tests: `make test`
 

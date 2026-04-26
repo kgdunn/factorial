@@ -69,6 +69,7 @@ nav:
       - Specification: frontend/specification.md
   - Development:
       - Testing: development/testing.md
+      - Testing database: development/testing-database.md
       - Linting & Formatting: development/linting.md
       - Database Migrations: development/migrations.md
   - Deployment:

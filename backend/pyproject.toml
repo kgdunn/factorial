@@ -43,7 +43,6 @@ dev = [
     "pytest-asyncio>=0.25.0",
     "pytest-cov>=6.0",
     "ruff>=0.9.0",
-    "aiosqlite>=0.21.0",
 ]
 
 [build-system]
@@ -84,3 +83,9 @@ known-first-party = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Share one event loop across the whole pytest session so the
+# session-scoped Postgres engine fixture in tests/conftest.py works
+# alongside function-scoped per-test fixtures. See
+# docs/development/testing-database.md for the rationale.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"

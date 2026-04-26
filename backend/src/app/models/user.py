@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, LargeBinary, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String, func
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,10 +40,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_login_ip: Mapped[str | None] = mapped_column(
-        String(45).with_variant(INET(), "postgresql"),
-        nullable=True,
-    )
+    last_login_ip: Mapped[str | None] = mapped_column(INET(), nullable=True)
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
@@ -62,10 +59,7 @@ class User(Base):
     byok_token_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     byok_dek_wrapped: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     byok_kek_salt: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
-    byok_kdf_params: Mapped[dict | None] = mapped_column(
-        JSON().with_variant(JSONB(), "postgresql"),
-        nullable=True,
-    )
+    byok_kdf_params: Mapped[dict | None] = mapped_column(JSONB(), nullable=True)
     byok_token_last_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

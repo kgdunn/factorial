@@ -30,8 +30,32 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      # Ephemeral Postgres for the test suite. Mirrors the
+      # ``postgres-test`` service in ``docker-compose.yml`` (different
+      # port to keep dev unaffected; CI binds 5432:5432 since nothing
+      # else competes for the port). Conftest runs ``alembic upgrade
+      # head`` against this DB at session start.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: doe_user
+          POSTGRES_PASSWORD: doe_password
+          POSTGRES_DB: doe_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U doe_user -d doe_test_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       APP_ENV: testing
+      POSTGRES_TEST_HOST: localhost
+      POSTGRES_TEST_PORT: "5432"
+      POSTGRES_TEST_USER: doe_user
+      POSTGRES_TEST_PASSWORD: doe_password
+      POSTGRES_TEST_DB: doe_test_db
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7

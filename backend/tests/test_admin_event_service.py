@@ -1,8 +1,7 @@
 """Unit tests for ``app.services.admin_event_service``.
 
-Uses an in-memory SQLite engine so the tests do not need a running
-Postgres. The ``payload`` column falls back to plain ``JSON`` on SQLite
-via the variant declared on the model.
+Uses the session-scoped Postgres engine + transactional ``db_session``
+fixture from ``conftest.py``.
 """
 
 from __future__ import annotations
@@ -12,35 +11,10 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base
 from app.models.admin_event import AdminEvent  # noqa: F401 — register table
 from app.services import admin_event_service
-
-
-@pytest.fixture
-async def db_session():
-    from sqlalchemy import ColumnDefault  # noqa: PLC0415
-
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-
-    for table in Base.metadata.tables.values():
-        for col in table.columns:
-            if col.server_default is not None and "gen_random_uuid" in str(getattr(col.server_default, "arg", "")):
-                col.server_default = None
-                col.default = ColumnDefault(uuid.uuid4)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as session:
-        yield session
-    await engine.dispose()
 
 
 async def test_start_event_inserts_in_progress(db_session: AsyncSession) -> None:
