@@ -146,6 +146,13 @@ async def add_results(
 
     Uses ``run_index`` as the merge key: existing rows are updated,
     new rows are appended.  Supports incremental entry.
+
+    Each row is stored as-is, so optional per-data-point metadata
+    keys like ``notes`` (str) and ``included`` (bool, default ``true``
+    when absent) round-trip transparently.  Updating a row that
+    already carries a ``notes`` value with a payload that omits
+    ``notes`` is a no-op for that key — the existing note is
+    preserved by the ``{**existing, **row}`` merge below.
     """
     experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:
