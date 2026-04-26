@@ -18,7 +18,8 @@
     | 'download'
     | 'upload'
     | 'back'
-    | 'forward';
+    | 'forward'
+    | 'microphone';
 
   interface Props {
     name: IconName;
@@ -184,5 +185,11 @@
       stroke-linecap="round"
       stroke-linejoin="round"
     />
+  {:else if name === 'microphone'}
+    <g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="7.5" y="3" width="5" height="9" rx="2.5" />
+      <path d="M5 10 V11 C5 13.76 7.24 16 10 16 C12.76 16 15 13.76 15 11 V10" />
+      <path d="M10 16 V18 M7.5 18 H12.5" />
+    </g>
   {/if}
 </svg>
