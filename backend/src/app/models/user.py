@@ -40,10 +40,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_login_ip: Mapped[str | None] = mapped_column(
-        String(45).with_variant(INET(), "postgresql"),
-        nullable=True,
-    )
+    last_login_ip: Mapped[str | None] = mapped_column(INET(), nullable=True)
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
