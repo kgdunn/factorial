@@ -213,4 +213,5 @@ async def complete_registration(
 
     signup.status = "registered"
     await db.flush()
+    await db.refresh(user)
     return user
