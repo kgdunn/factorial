@@ -49,6 +49,13 @@ context.
 - [ ] Consider extending the `ExportMenu.svelte` PDF `acknowledge_share`
       gating pattern (`experiments.py:286`) to the bundle, since it also
       embeds raw response data.
+- [ ] HTML-escape user-supplied strings in `email_service.py` templates.
+      `send_signup_confirmation` and `send_admin_notification` interpolate
+      `use_case` (and `signup_email`) directly into HTML via f-string with no
+      `html.escape(...)`. A submitter could land tags / scripts in the
+      admin-facing email. Low blast radius (admin reads in their own client,
+      not on a Factorial domain) but worth fixing as a single pass across the
+      file.
 
 ## Plot reproducibility
 
