@@ -130,8 +130,13 @@ docker compose up -d postgres-test    # one-time per machine
 make test                              # full suite
 ```
 
-`make test` preflights `pg_isready` and prints the missing-container
-hint if the DB is unreachable.
+`make test` preflights the test DB by running `pg_isready` *inside*
+the `postgres-test` container (`docker compose exec -T postgres-test
+pg_isready ...`), so the host does not need `postgresql-client`
+installed. If the container is not running, the target prints the
+missing-container hint and exits non-zero. `make deploy-preflight`
+brings the container up and waits for it to be ready before invoking
+`make test`, so deploys don't fall over on a stopped test DB.
 
 ## CI workflow
 
