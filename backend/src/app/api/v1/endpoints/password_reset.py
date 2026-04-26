@@ -85,6 +85,13 @@ async def complete_setup(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
 
+    # BYOK: a setup/reset flow does not have the OLD password in scope,
+    # so the wrapped DEK is unrecoverable. Mark it orphaned so the UI
+    # prompts the user to re-enrol their API key on next chat. No-op
+    # for users without an active enrollment (the common path,
+    # including every first-time-setup admin).
+    byok_session_service.orphan_dek(user)
+
     new_session = await session_service.create_session(
         db,
         user_id=user.id,
