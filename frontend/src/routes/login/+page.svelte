@@ -22,8 +22,9 @@
   }
 </script>
 
-<div class="flex min-h-full items-center justify-center px-4 py-12">
-  <div class="w-full max-w-sm space-y-6">
+<div class="h-full overflow-y-auto">
+  <div class="flex min-h-full items-center justify-center px-4 py-12">
+    <div class="w-full max-w-sm space-y-6">
     <div class="text-center">
       <h1 class="text-2xl font-bold text-gray-900">Sign in</h1>
       <p class="mt-2 text-sm text-gray-600">
@@ -70,5 +71,6 @@
         <a href="/auth/reset" class="text-primary hover:underline">Forgot your password?</a>
       </div>
     </form>
+    </div>
   </div>
 </div>

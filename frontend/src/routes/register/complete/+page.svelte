@@ -54,8 +54,9 @@
   }
 </script>
 
-<div class="flex min-h-full items-center justify-center px-4 py-12">
-  <div class="w-full max-w-sm space-y-6">
+<div class="h-full overflow-y-auto">
+  <div class="flex min-h-full items-center justify-center px-4 py-12">
+    <div class="w-full max-w-sm space-y-6">
     {#if tokenValid === null}
       <div class="text-center">
         <p class="text-gray-500">Validating your invite...</p>
@@ -141,5 +142,6 @@
         </button>
       </form>
     {/if}
+    </div>
   </div>
 </div>

@@ -74,8 +74,9 @@
   }
 </script>
 
-<div class="flex min-h-full items-center justify-center px-4 py-12">
-  <div class="w-full max-w-md space-y-6">
+<div class="h-full overflow-y-auto">
+  <div class="flex min-h-full items-center justify-center px-4 py-12">
+    <div class="w-full max-w-md space-y-6">
     {#if submitted}
       <!-- Success confirmation -->
       <div class="text-center space-y-4">
@@ -209,5 +210,6 @@
         </button>
       </form>
     {/if}
+    </div>
   </div>
 </div>
