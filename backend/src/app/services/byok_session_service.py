@@ -45,13 +45,17 @@ def _has_active_enrollment(user: User) -> bool:
     DEK unwrapped at login (the next chat would just 401 against
     Anthropic again). ``orphaned`` users have unrecoverable wraps and
     must re-enrol via the UI.
+
+    Uses ``getattr`` with defaults so a not-yet-persisted ORM instance,
+    or a test stub that does not set the BYOK columns explicitly,
+    behaves the same as a row with ``status='absent'``.
     """
     return (
-        user.byok_token_status == STATUS_ACTIVE
-        and user.byok_token_ciphertext is not None
-        and user.byok_dek_wrapped is not None
-        and user.byok_kek_salt is not None
-        and user.byok_kdf_params is not None
+        getattr(user, "byok_token_status", STATUS_ABSENT) == STATUS_ACTIVE
+        and getattr(user, "byok_token_ciphertext", None) is not None
+        and getattr(user, "byok_dek_wrapped", None) is not None
+        and getattr(user, "byok_kek_salt", None) is not None
+        and getattr(user, "byok_kdf_params", None) is not None
     )
 
 
@@ -89,9 +93,15 @@ def decrypt_token_for_request(user: User, session: Session) -> str:
     ``BYOKDecryptionError`` if any wrap is corrupt, missing, or was
     encrypted under a different master key.
     """
-    if user.byok_token_status != STATUS_ACTIVE or user.byok_token_ciphertext is None:
+    if (
+        getattr(user, "byok_token_status", STATUS_ABSENT) != STATUS_ACTIVE
+        or getattr(user, "byok_token_ciphertext", None) is None
+    ):
         raise BYOKDecryptionError("user has no active BYOK enrollment")
-    if session.byok_session_key_encrypted is None or session.byok_dek_session_wrapped is None:
+    if (
+        getattr(session, "byok_session_key_encrypted", None) is None
+        or getattr(session, "byok_dek_session_wrapped", None) is None
+    ):
         raise BYOKDecryptionError("session has no BYOK wraps; user must sign in again")
 
     master_key = byok_service.load_master_key()
@@ -136,7 +146,7 @@ def orphan_dek(user: User) -> bool:
     just orphaned, False otherwise. Idempotent — calling on an already-
     orphaned or absent row is a no-op.
     """
-    if user.byok_token_status not in (STATUS_ACTIVE, STATUS_REJECTED):
+    if getattr(user, "byok_token_status", STATUS_ABSENT) not in (STATUS_ACTIVE, STATUS_REJECTED):
         return False
     user.byok_token_status = STATUS_ORPHANED
     return True
