@@ -73,14 +73,30 @@ class ExperimentUpdate(BaseModel):
 class ResultsEntry(BaseModel):
     """POST /experiments/{id}/results request body.
 
-    Each item in ``results`` must include ``run_index`` (int) and one or
-    more response columns with numeric values.
+    Each item in ``results`` must include ``run_index`` (int) and may
+    include one or more response columns with numeric values.
+
+    Two optional per-row metadata keys are also recognised:
+
+    * ``notes`` (``str``): free-form observation about that data point.
+    * ``included`` (``bool``, default ``true`` when omitted): whether
+      the row should participate in downstream analysis.  ``false``
+      flags the point as an excluded outlier; the response value is
+      still preserved so the user can revert later.
+
+    Rows are stored as-is in ``experiments.results_data`` and merged on
+    ``run_index`` (see ``experiment_service.add_results``), so any extra
+    keys round-trip transparently.
     """
 
     results: list[dict[str, Any]] = Field(
         ...,
         min_length=1,
-        description="Array of result objects. Each must have 'run_index' (int) and response columns.",
+        description=(
+            "Array of result objects. Each must have 'run_index' (int); response "
+            "columns and the optional 'notes' (str) / 'included' (bool, default true) "
+            "metadata keys are all merged on run_index."
+        ),
     )
 
 

@@ -302,6 +302,91 @@ class TestResults:
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
+    async def test_add_results_with_notes_and_included(self):
+        """Optional ``notes`` (str) and ``included`` (bool) keys are
+        accepted by the request schema and reach the service unchanged.
+
+        The schema is ``list[dict[str, Any]]`` so this test guards
+        against an accidental tightening that would silently drop the
+        new metadata keys before they reach ``add_results``.
+        """
+        captured: dict[str, Any] = {}
+
+        async def _spy(db: Any, experiment_id: Any, results: Any, user_id: Any) -> Any:
+            captured["results"] = results
+            return _FakeExperiment(results_data=results)
+
+        with patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc:
+            mock_svc.add_results = AsyncMock(side_effect=_spy)
+
+            payload = [
+                {"run_index": 0, "Yield": 85.2, "notes": "thermocouple drifted", "included": False},
+                {"run_index": 1, "Yield": 91.0},
+            ]
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.post(
+                    f"/api/v1/experiments/{_SAMPLE_EXPERIMENT_ID}/results",
+                    json={"results": payload},
+                )
+
+            assert resp.status_code == 200
+            assert captured["results"] == payload
+
+            data = resp.json()
+            assert data["n_results_entered"] == 2
+            first = data["results_data"][0]
+            assert first["notes"] == "thermocouple drifted"
+            assert first["included"] is False
+
+    @pytest.mark.asyncio
+    async def test_add_results_merge_preserves_notes(self):
+        """A subsequent update at the same ``run_index`` that omits
+        ``notes`` must NOT erase the previously-stored note.
+
+        Exercises ``experiment_service.add_results`` directly, mocking
+        only the ownership lookup and the session flush.
+        """
+        from app.services import experiment_service
+
+        class _Stub:
+            def __init__(self) -> None:
+                self.results_data: list[dict[str, Any]] | None = None
+
+        stub = _Stub()
+        flush_mock = AsyncMock()
+        db_mock = AsyncMock()
+        db_mock.flush = flush_mock
+
+        with patch.object(
+            experiment_service,
+            "_get_owned_experiment",
+            new=AsyncMock(return_value=stub),
+        ):
+            await experiment_service.add_results(
+                db_mock,
+                _SAMPLE_EXPERIMENT_ID,
+                [{"run_index": 0, "Yield": 85.2, "notes": "drifted", "included": False}],
+                user_id=uuid.uuid4(),
+            )
+            assert stub.results_data == [{"run_index": 0, "Yield": 85.2, "notes": "drifted", "included": False}]
+
+            await experiment_service.add_results(
+                db_mock,
+                _SAMPLE_EXPERIMENT_ID,
+                [{"run_index": 0, "Yield": 88.7}],
+                user_id=uuid.uuid4(),
+            )
+
+        merged = stub.results_data
+        assert merged is not None and len(merged) == 1
+        row = merged[0]
+        assert row["run_index"] == 0
+        assert row["Yield"] == 88.7  # response value updated
+        assert row["notes"] == "drifted"  # note preserved across the merge
+        assert row["included"] is False  # exclude flag preserved
+
+    @pytest.mark.asyncio
     async def test_get_results(self):
         results_data = [{"run_index": 0, "yield": 85.2}, {"run_index": 1, "yield": 91.0}]
         with patch("app.api.v1.endpoints.experiments.experiment_service") as mock_svc:
