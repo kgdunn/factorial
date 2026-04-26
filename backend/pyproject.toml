@@ -1,6 +1,6 @@
 [project]
 name = "factorial"
-version = "0.25.1"
+version = "0.26.0"
 
 description = "Backend for conversational Design of Experiments analysis"
 license = { text = "Apache-2.0" }
@@ -33,6 +33,8 @@ dependencies = [
     "maxminddb>=2.6.0",
     "sqladmin>=0.20.0",
     "itsdangerous>=2.2.0",
+    "cryptography>=44.0",
+    "argon2-cffi>=23.1",
 ]
 
 [project.optional-dependencies]
