@@ -312,10 +312,19 @@ async def get_conversation_messages(
     if current_msg:
         messages.append(current_msg)
 
+    # Conversation-level BYOK flag: true if any persisted Message in
+    # this conversation was billed against a user-supplied Anthropic
+    # key. Surfaced to the chat UI as a small "using your own key"
+    # badge so users can tell at a glance which conversations bypassed
+    # the platform markup. Cheap to compute since byok_used is already
+    # on every Message row.
+    byok_used = any(getattr(row, "byok_used", False) for row in rows)
+
     return {
         "conversation_id": str(conversation.id),
         "title": conversation.title,
         "messages": messages,
+        "byok_used": byok_used,
     }
 
 
