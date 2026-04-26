@@ -17,8 +17,9 @@
   }
 </script>
 
-<div class="flex min-h-full items-center justify-center px-4 py-12">
-  <div class="w-full max-w-sm space-y-6">
+<div class="h-full overflow-y-auto">
+  <div class="flex min-h-full items-center justify-center px-4 py-12">
+    <div class="w-full max-w-sm space-y-6">
     {#if submitted}
       <div class="text-center space-y-4">
         <h1 class="text-2xl font-bold text-gray-900">Check your email</h1>
@@ -61,5 +62,6 @@
         </div>
       </form>
     {/if}
+    </div>
   </div>
 </div>

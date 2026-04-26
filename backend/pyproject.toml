@@ -1,6 +1,6 @@
 [project]
 name = "factorial"
-version = "0.25.0"
+version = "0.25.1"
 
 description = "Backend for conversational Design of Experiments analysis"
 license = { text = "Apache-2.0" }

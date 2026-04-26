@@ -109,6 +109,10 @@ async def send_signup_confirmation(to: str, use_case: str) -> None:
 will review it shortly. You'll get another email once your account is approved.</p>
 <p><strong>Here's a copy of what you submitted:</strong></p>
 <blockquote>{use_case}</blockquote>
+<p>&mdash;</p>
+<p><strong>P.S.:</strong> Why did you sign up? What brought you here?</p>
+<p>Hit "Reply" and let me know. I read and reply to every email.</p>
+<p>Regards,<br>Kevin</p>
 """
     try:
         await send_email(to, "Signup request received — Factorial", html)
