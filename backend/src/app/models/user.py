@@ -5,8 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import INET, UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String, func
+from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -46,6 +46,32 @@ class User(Base):
     )
     country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # BYOK (Bring-Your-Own Anthropic API key) columns. All ciphertext
+    # blobs are AES-256-GCM ``nonce(12) || ct || tag(16)`` produced by
+    # ``app.services.byok_service``. ``byok_token_status`` is one of
+    # ``absent | active | rejected | orphaned`` (string + app-level
+    # enforcement, matching ``conversations.status`` style).
+    #
+    #   absent     - user has not enrolled a token
+    #   active     - last verification call to Anthropic succeeded
+    #   rejected   - Anthropic returned 401 on the most recent attempt;
+    #                UI prompts the user to re-enter
+    #   orphaned   - DEK is unrecoverable (typically a password reset);
+    #                ciphertext kept for diagnostic clarity, not usable
+    byok_token_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    byok_dek_wrapped: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    byok_kek_salt: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    byok_kdf_params: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    byok_token_last_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    byok_token_status: Mapped[str] = mapped_column(
+        String(20),
+        default="absent",
+        server_default="absent",
+    )
 
     role = relationship("Role", lazy="joined", foreign_keys=[role_id])
 
