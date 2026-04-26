@@ -72,12 +72,20 @@ async def create_session(
     user_agent: str | None,
     ip: str | None,
     family_id: uuid.UUID | None = None,
+    byok_session_key_encrypted: bytes | None = None,
+    byok_dek_session_wrapped: bytes | None = None,
 ) -> NewSession:
     """Mint a new session row and the matching CSRF token.
 
     Pass ``family_id`` to opt this session into an existing family (used
     when an authenticated user opens a new device while keeping their
     "logout-everywhere" grouping); otherwise a fresh family is created.
+
+    The two BYOK parameters carry the per-session DEK wrap material
+    produced by :func:`app.services.byok_session_service.unwrap_for_login`.
+    Pass both together or neither — passing only one would leave the
+    session row in an unusable half-state. Default ``None`` means the
+    user has no active enrollment, which is the common case.
     """
     raw_id = secrets.token_bytes(_SESSION_ID_BYTES)
     csrf_token = secrets.token_urlsafe(_CSRF_TOKEN_BYTES)
@@ -92,6 +100,8 @@ async def create_session(
         absolute_expires_at=now + timedelta(days=settings.cookie_session_absolute_days),
         user_agent=(user_agent or "")[:256] or None,
         ip=ip,
+        byok_session_key_encrypted=byok_session_key_encrypted,
+        byok_dek_session_wrapped=byok_dek_session_wrapped,
     )
     db.add(session)
     await db.flush()

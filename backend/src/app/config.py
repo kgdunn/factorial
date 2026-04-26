@@ -88,6 +88,22 @@ class Settings(BaseSettings):
     register_rate_limit: str = "3/hour"
     feedback_rate_limit: str = "20/hour"
 
+    # BYOK (Bring-Your-Own Anthropic API key).
+    # ``byok_master_key`` is a base64-encoded 32-byte key used to encrypt
+    # the per-session DEK wraps stored in the ``sessions`` table. It must
+    # be set as soon as any user enrols a personal token; without it,
+    # active BYOK sessions cannot be decrypted after a server restart.
+    # The Argon2id parameters control the cost of password->KEK derivation
+    # at login. Defaults follow the OWASP "Argon2id recommended" profile
+    # adjusted for memory (64 MiB) so derivation stays under ~250 ms on a
+    # modern x86 server. Any change requires a re-enrolment for existing
+    # users — the active params are stored on the user row alongside the
+    # salt so old values keep working.
+    byok_master_key: str = ""
+    byok_argon2_memory_kib: int = 65536
+    byok_argon2_iterations: int = 3
+    byok_argon2_parallelism: int = 1
+
     # Tool execution
     # ``tool_safe_mode`` routes process_improve calls through
     # safe_execute_tool_call (subprocess isolation + timeout + memory cap).

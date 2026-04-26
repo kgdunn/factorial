@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 
@@ -14,16 +15,41 @@ from app.api.deps import SERVICE_USER_ID, AuthUser, require_auth
 from app.api.rate_limit import limiter
 from app.config import settings
 from app.db.session import get_db_session
+from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     SessionResponse,
     UserResponse,
 )
-from app.services import balance_service, session_service
+from app.services import balance_service, byok_session_service, session_service
 from app.services.auth_service import authenticate_user, record_login_activity
+from app.services.byok_service import BYOKConfigurationError, BYOKDecryptionError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _byok_wraps_for_login(user: User, password: str) -> tuple[bytes | None, bytes | None]:
+    """Compute per-session BYOK wraps, swallowing operational failures.
+
+    Login should succeed even if BYOK is misconfigured or the user's
+    stored ciphertext is corrupt — the caller will just write NULL
+    onto the new session row and the chat path will fall back to the
+    platform key. We mark the row 'orphaned' on a real decryption
+    failure so the user is told to re-enrol; a missing master key is a
+    server-side problem and is logged loudly without touching the row.
+    """
+    try:
+        return byok_session_service.unwrap_for_login(user, password)
+    except BYOKConfigurationError:
+        logger.exception("BYOK unwrap_for_login failed: master key misconfigured (user=%s)", user.id)
+        return None, None
+    except BYOKDecryptionError:
+        logger.exception("BYOK unwrap_for_login failed: DEK unreadable, marking orphaned (user=%s)", user.id)
+        byok_session_service.orphan_dek(user)
+        return None, None
 
 
 def _client_ip(request: Request) -> str | None:
@@ -75,11 +101,14 @@ async def login(
 
     ip = _client_ip(request)
     await record_login_activity(db, user, ip=ip, timezone=body.timezone)
+    byok_session_key_encrypted, byok_dek_session_wrapped = await _byok_wraps_for_login(user, body.password)
     new_session = await session_service.create_session(
         db,
         user_id=user.id,
         user_agent=_user_agent(request),
         ip=ip,
+        byok_session_key_encrypted=byok_session_key_encrypted,
+        byok_dek_session_wrapped=byok_dek_session_wrapped,
     )
     set_session_cookies(
         response,

@@ -64,3 +64,13 @@ class Session(Base):
 
     user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
     ip: Mapped[str | None] = mapped_column(INET(), nullable=True)
+
+    # BYOK: per-session DEK wrap. Populated only if the session belongs
+    # to a user who has an active BYOK enrollment. ``byok_session_key_encrypted``
+    # is the per-session 32-byte AEAD key, encrypted at rest under
+    # ``settings.byok_master_key``. ``byok_dek_session_wrapped`` is the
+    # DEK wrapped with that session key. Both are AES-GCM blobs produced
+    # by ``app.services.byok_service``. The cookie value itself is
+    # unchanged — these never leave the server.
+    byok_session_key_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    byok_dek_session_wrapped: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)

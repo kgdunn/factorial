@@ -92,8 +92,6 @@ The version is defined in `backend/pyproject.toml` under `[project] version`. It
 - **MINOR** (middle position, e.g., 0.3.8 → 0.4.0): new features, new modules, significant API additions, or meaningful behavioral changes. Resets PATCH to 0.
 - **If unsure** whether a change is major or minor, **ask the user** before bumping.
 
-The PyPI publish workflow (`.github/workflows/publish.yml`) automatically detects version changes on push to `main` and publishes to PyPI, then creates a GitHub Release with a `v$VERSION` tag.
-
 ## Configuration — `.env.example` is canonical
 
 `.env.example` at the repo root is the **single source of truth** for every environment variable the backend reads. It must stay in sync with `backend/src/app/config.py`: every field on the `Settings` class has a matching entry in `.env.example`, and no variable is documented anywhere else unless it also appears there.

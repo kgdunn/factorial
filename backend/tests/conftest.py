@@ -90,12 +90,14 @@ def _alembic_upgrade_head() -> None:
     """Run ``alembic upgrade head`` against the test database in-process.
 
     Sets ``sqlalchemy.url`` on the Alembic config so ``alembic/env.py``
-    targets the test Postgres rather than the dev one. Runs in the
-    current process (no subprocess) so any failure surfaces as a
-    standard Python traceback.
+    targets the test Postgres rather than the dev one, and sets
+    ``script_location`` to an absolute path so the upgrade works
+    regardless of the pytest CWD. Runs in the current process (no
+    subprocess) so any failure surfaces as a standard Python traceback.
     """
     cfg = AlembicConfig(str(_ALEMBIC_INI))
     cfg.set_main_option("sqlalchemy.url", settings.database_url_test_sync)
+    cfg.set_main_option("script_location", str(_ALEMBIC_INI.parent / "alembic"))
     command.upgrade(cfg, "head")
 
 
