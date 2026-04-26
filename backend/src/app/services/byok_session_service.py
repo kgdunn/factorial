@@ -1,20 +1,19 @@
 """DB-aware BYOK lifecycle helpers.
 
 Composes the pure-crypto primitives in ``byok_service`` with the User /
-Session ORM rows. Three operations are exposed:
+Session ORM rows. Public operations:
 
-- :func:`unwrap_for_login` — call after ``authenticate_user`` succeeds.
-  Returns the two ciphertext blobs that must be written to the new
-  ``sessions`` row, or ``(None, None)`` for users without an active
-  enrollment.
-- :func:`decrypt_token_for_request` — call when an authenticated request
-  needs the user's plaintext API token (e.g. inside the chat path).
-  Returns the token; raises ``BYOKDecryptionError`` if the session row
-  is missing the wraps or the master key has rotated incompatibly.
-- :func:`rewrap_dek_on_password_change` — call inside the password-change
-  endpoint after the old password has been verified. Re-derives the KEK
-  with the new password and re-wraps the same DEK; the long-lived token
-  ciphertext is unchanged.
+- :func:`unwrap_for_login` — produce per-session DEK wraps for a fresh
+  ``sessions`` row at successful login.
+- :func:`decrypt_token_for_request` — recover the plaintext token for
+  the chat path.
+- :func:`rewrap_dek_on_password_change` — rotate the wrapping KEK while
+  preserving the DEK and the long-lived token ciphertext.
+- :func:`orphan_dek` — mark the wraps unrecoverable on password reset.
+- :func:`enroll` — first-time enrollment: encrypt the token, generate a
+  fresh DEK, wrap it under the user's password.
+- :func:`disable` — wipe all four user-side ciphertext columns.
+- :func:`record_history` — append-only audit row.
 
 This module never returns the password, the KEK, or the DEK to its
 callers. All key material lives only inside one stack frame and is
@@ -23,6 +22,12 @@ released as soon as the function returns.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.byok_credentials_history import BYOKCredentialsHistory
 from app.models.session import Session
 from app.models.user import User
 from app.services import byok_service
@@ -152,6 +157,107 @@ def orphan_dek(user: User) -> bool:
     return True
 
 
+def enroll(user: User, password: str, anthropic_api_key: str) -> None:
+    """Land a fresh BYOK enrollment on the user row in place.
+
+    Generates a new salt + DEK, wraps the DEK under a KEK derived from
+    the supplied password (which must be the user's current password —
+    the endpoint is responsible for verifying it before calling this),
+    encrypts the API key under the DEK, and sets ``byok_token_status``
+    to ``active``.
+
+    Replaces any existing ciphertext on the row, which is the right
+    behavior for ``POST /byok/rotate`` and for re-enrolment after an
+    orphan / reject. The audit row in
+    ``byok_credentials_history`` is left to the endpoint to write so
+    rotation can record both the close-out of the old credential and
+    the open of the new one in the same DB session.
+    """
+    salt = byok_service.generate_kek_salt()
+    params = byok_service.default_kdf_params()
+    kek = byok_service.derive_kek(password, salt, params)
+    dek = byok_service.generate_dek()
+    user.byok_kek_salt = salt
+    user.byok_kdf_params = params
+    user.byok_dek_wrapped = byok_service.wrap_dek(dek, kek)
+    user.byok_token_ciphertext = byok_service.encrypt_token(anthropic_api_key, dek)
+    user.byok_token_status = STATUS_ACTIVE
+
+
+def disable(user: User) -> bool:
+    """Wipe the user-side BYOK ciphertexts and revert status to ``absent``.
+
+    Idempotent: returns ``False`` if there was nothing to wipe.
+    Per-session DEK wraps in the ``sessions`` table are not touched
+    here — they will fail to decrypt against the wiped user row at
+    the next chat request and the chat path will fall back to the
+    platform key. Operators who want immediate cutover should also
+    revoke the user's active sessions via the existing
+    ``revoke_family`` path.
+    """
+    had_something = (
+        user.byok_token_ciphertext is not None
+        or user.byok_dek_wrapped is not None
+        or user.byok_kek_salt is not None
+        or user.byok_kdf_params is not None
+        or user.byok_token_status != STATUS_ABSENT
+    )
+    user.byok_token_ciphertext = None
+    user.byok_dek_wrapped = None
+    user.byok_kek_salt = None
+    user.byok_kdf_params = None
+    user.byok_token_last_verified_at = None
+    user.byok_token_status = STATUS_ABSENT
+    return had_something
+
+
+def mark_verified(user: User) -> None:
+    """Flip status to ``active`` and stamp ``last_verified_at = now``.
+
+    Called from ``POST /byok/test`` and ``POST /byok/enroll`` after
+    Anthropic returns OK on the verification ping.
+    """
+    user.byok_token_status = STATUS_ACTIVE
+    user.byok_token_last_verified_at = datetime.now(UTC)
+
+
+def mark_rejected(user: User) -> None:
+    """Flip status to ``rejected`` after Anthropic rejects the key.
+
+    The ciphertext stays in place so the UI can offer "re-enter your
+    key" without losing the historical record. Rotation is delete-
+    then-create elsewhere; rejection is a soft transition and does
+    not destroy the wraps.
+    """
+    user.byok_token_status = STATUS_REJECTED
+
+
+async def record_history(
+    db: AsyncSession,
+    *,
+    user: User,
+    action: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    """Append one audit row to ``byok_credentials_history``.
+
+    Always writes ``status_after`` from the user's current
+    ``byok_token_status``, so callers should mutate the user row first
+    and then call this. ``extra`` is reserved for future fields and is
+    currently ignored — kept on the signature so future audits (e.g.
+    rotation reason codes) don't churn every call site.
+    """
+    del extra  # currently unused; reserved for future audit dimensions
+    db.add(
+        BYOKCredentialsHistory(
+            user_id=user.id,
+            action=action,
+            status_after=getattr(user, "byok_token_status", STATUS_ABSENT),
+            last_verified_at=getattr(user, "byok_token_last_verified_at", None),
+        ),
+    )
+
+
 __all__ = [
     "STATUS_ABSENT",
     "STATUS_ACTIVE",
@@ -160,7 +266,12 @@ __all__ = [
     "BYOKConfigurationError",
     "BYOKDecryptionError",
     "decrypt_token_for_request",
+    "disable",
+    "enroll",
+    "mark_rejected",
+    "mark_verified",
     "orphan_dek",
+    "record_history",
     "rewrap_dek_on_password_change",
     "unwrap_for_login",
 ]

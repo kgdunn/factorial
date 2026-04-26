@@ -50,19 +50,48 @@ def lookup_rates(model: str) -> tuple[Decimal, Decimal]:
     return MODEL_RATES[best_prefix]
 
 
-def calculate_cost(model: str, input_tokens: int, output_tokens: int) -> dict[str, Decimal]:
-    """Snapshot the rates, costs, markup rate, and marked-up total for a call."""
+def calculate_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    *,
+    byok_used: bool = False,
+) -> dict[str, Decimal | bool]:
+    """Snapshot the rates, costs, markup, and billable amount for a call.
+
+    ``byok_used`` flips two fields:
+
+    - ``markup_cost_usd`` becomes 0 (we do not add a platform markup
+      to a key that bills the user directly at Anthropic).
+    - ``billable_to_user_usd`` becomes 0 (the user is billed at the
+      Anthropic side; nothing flows through our balance ledger).
+
+    For platform-key turns ``markup_cost_usd = raw * (1 + markup_rate)``
+    matches the historical formula, and ``billable_to_user_usd ==
+    markup_cost_usd``. Historical rows on disk continue to satisfy
+    ``billable_to_user_usd == markup_cost_usd`` because they were all
+    written under that branch.
+
+    The ``raw_cost_usd`` field stays accurate either way — it is what
+    Anthropic charged for the call, which is real cost regardless of
+    who paid it. Margin reporting can subtract BYOK rows by filtering
+    on ``byok_used``.
+    """
     input_rate, output_rate = lookup_rates(model)
     input_cost = (Decimal(input_tokens) * input_rate) / _MTOK
     output_cost = (Decimal(output_tokens) * output_rate) / _MTOK
     raw = input_cost + output_cost
-    markup = CURRENT_MARKUP_RATE
+    markup_rate = CURRENT_MARKUP_RATE
+    markup_cost = _ZERO if byok_used else raw * (Decimal(1) + markup_rate)
+    billable = _ZERO if byok_used else markup_cost
     return {
         "input_rate_usd_per_mtok": input_rate,
         "output_rate_usd_per_mtok": output_rate,
         "input_cost_usd": input_cost,
         "output_cost_usd": output_cost,
         "raw_cost_usd": raw,
-        "markup_rate": markup,
-        "markup_cost_usd": raw * (Decimal(1) + markup),
+        "markup_rate": markup_rate,
+        "markup_cost_usd": markup_cost,
+        "billable_to_user_usd": billable,
+        "byok_used": byok_used,
     }

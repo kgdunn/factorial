@@ -81,3 +81,42 @@ class TestCalculateCost:
         expected = raw * (Decimal("1") + pricing.CURRENT_MARKUP_RATE)
         assert snap["raw_cost_usd"] == raw
         assert snap["markup_cost_usd"] == expected
+
+    def test_platform_key_billable_equals_markup(self):
+        # On the platform path, billable_to_user_usd is just an alias for
+        # markup_cost_usd — they must agree byte-for-byte so balance
+        # ledger reads / writes never disagree on rounding.
+        snap = pricing.calculate_cost("claude-sonnet-4", 100, 50)
+        assert snap["byok_used"] is False
+        assert snap["billable_to_user_usd"] == snap["markup_cost_usd"]
+
+
+class TestCalculateCostBYOK:
+    def test_byok_zeros_markup_and_billable(self):
+        # Same model + tokens as the platform-key snapshot above, but
+        # byok_used=True must zero both markup_cost_usd and
+        # billable_to_user_usd while keeping raw_cost_usd accurate.
+        snap = pricing.calculate_cost("claude-sonnet-4", 100, 50, byok_used=True)
+        assert snap["byok_used"] is True
+        assert snap["raw_cost_usd"] == Decimal("0.00105")
+        assert snap["markup_cost_usd"] == Decimal("0")
+        assert snap["billable_to_user_usd"] == Decimal("0")
+
+    def test_byok_keeps_rates_recorded(self):
+        # The rates are still snapshotted on BYOK rows so the message
+        # rows accurately describe what Anthropic charged the user.
+        snap = pricing.calculate_cost("claude-sonnet-4", 1_000_000, 1_000_000, byok_used=True)
+        assert snap["input_rate_usd_per_mtok"] == Decimal("3")
+        assert snap["output_rate_usd_per_mtok"] == Decimal("15")
+        assert snap["raw_cost_usd"] == Decimal("18")
+        # markup_rate is the rate that was *in force* — meaningful for
+        # auditing even if it didn't get applied.
+        assert snap["markup_rate"] == pricing.CURRENT_MARKUP_RATE
+
+    def test_byok_default_is_false(self):
+        # Existing call sites that don't pass byok_used must keep the
+        # historical platform-key behaviour unchanged.
+        snap = pricing.calculate_cost("claude-sonnet-4", 100, 50)
+        assert snap["byok_used"] is False
+        # Markup applied as before.
+        assert snap["markup_cost_usd"] == Decimal("0.00105") * (Decimal("1") + pricing.CURRENT_MARKUP_RATE)
