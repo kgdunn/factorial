@@ -75,13 +75,13 @@
   data-testid="plan-checklist"
 >
   <!-- Compact mobile header: only the in-progress step + count. -->
-  <div class="flex items-center gap-2 sm:hidden">
+  <div class="flex min-w-0 items-center gap-2 sm:hidden">
     {#if inProgressStep}
       <span
         class="inline-block h-2 w-2 flex-none animate-pulse rounded-full bg-amber-500"
         aria-hidden="true"
       ></span>
-      <span class="truncate text-stone-700 dark:text-stone-200">
+      <span class="min-w-0 flex-1 truncate text-stone-700 dark:text-stone-200">
         Step {inProgressIdx + 1} of {totalSteps}: {inProgressStep.text}
       </span>
       {#if stepElapsed(inProgressStep)}
@@ -90,7 +90,7 @@
         </span>
       {/if}
     {:else}
-      <span class="truncate text-stone-600 dark:text-stone-300">
+      <span class="min-w-0 flex-1 truncate text-stone-600 dark:text-stone-300">
         Plan · {totalSteps} steps
       </span>
     {/if}
@@ -171,14 +171,14 @@
   <!-- Live phase footer pill — only while this bubble is the in-flight one. -->
   {#if isStreaming && currentPhase}
     <div
-      class="mt-2 flex items-center gap-2 border-t border-stone-200/70 pt-2 text-xs
+      class="mt-2 flex min-w-0 items-center gap-2 border-t border-stone-200/70 pt-2 text-xs
              text-stone-700 dark:border-stone-700/60 dark:text-stone-300"
     >
       <span
         class="inline-block h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-amber-500"
         aria-hidden="true"
       ></span>
-      <span class="truncate">{phaseLabel(currentPhase)}</span>
+      <span class="min-w-0 flex-1 truncate">{phaseLabel(currentPhase)}</span>
       <span class="ml-auto flex-none tabular-nums">
         {formatElapsed(now - currentPhase.startedAt)}
       </span>

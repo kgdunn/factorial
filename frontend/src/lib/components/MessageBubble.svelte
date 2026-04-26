@@ -49,7 +49,7 @@
   </div>
 
   <div
-    class="max-w-[680px] rounded-xl border px-4 py-3.5 font-sans text-[14px] leading-[1.6]
+    class="min-w-0 max-w-[680px] rounded-xl border px-4 py-3.5 font-sans text-[14px] leading-[1.6]
            {isUser
              ? 'bg-clay-tint border-[#EBD9C7] text-ink'
              : 'bg-paper-2 border-rule-soft text-ink'}"
