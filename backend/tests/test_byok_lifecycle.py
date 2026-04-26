@@ -25,7 +25,6 @@ from app.services.byok_session_service import (
     STATUS_REJECTED,
 )
 
-_FAST_PARAMS = {"variant": "argon2id", "m": 8, "t": 1, "p": 1}
 _PASSWORD = "hunter2"
 _KEY = "sk-ant-api03-USERKEY"
 _KEY_ALT = "sk-ant-api03-ANOTHER"
