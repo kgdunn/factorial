@@ -33,6 +33,13 @@ context.
 
 ## Factorial backend
 
+- [ ] When the analysis pipeline starts fitting models against
+      `experiments.results_data`, drop rows where `included == false`
+      before passing the data to `process-improve`. The frontend's
+      Results Entry form (PR #119) already records the per-row
+      `included` flag (default `true`) and `notes`; the flag is
+      currently stored as metadata only and the analysis path does
+      not yet read it.
 - [ ] Populate `ToolCall.tool_version` per call in
       `backend/src/app/services/agent_loop.py` (field exists on the ORM but
       is currently left null). Lets the exporter pin per-call version when
