@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -17,10 +18,48 @@ from app.api.rate_limit import limiter
 from app.config import settings
 from app.db.session import async_session_factory, get_db_session
 from app.models.conversation import ChatEvent, Conversation, Message
+from app.models.session import Session as SessionRow
+from app.models.user import User
 from app.schemas.chat import ChatRequest
+from app.services import byok_session_service
 from app.services.agent_service import run_chat
+from app.services.byok_service import BYOKConfigurationError, BYOKDecryptionError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _resolve_byok_token(current_user: AuthUser) -> str | None:
+    """Fetch the user's plaintext Anthropic API token for this session.
+
+    Returns ``None`` for users without an active enrollment, when the
+    session row lacks the required wraps (e.g. the user has not signed
+    in since enrolling), or when BYOK is misconfigured. The chat path
+    falls back to the platform key in any of those cases — chat must
+    keep working even if the optional BYOK feature is degraded.
+
+    Token plaintext exists only inside this function and the returned
+    string; the agent layer hands it to the Anthropic SDK and lets it
+    fall out of scope at end-of-turn.
+    """
+    if current_user.session_id is None:
+        return None
+    try:
+        async with async_session_factory() as db:
+            user = await db.get(User, current_user.id)
+            session_row = await db.get(SessionRow, current_user.session_id)
+            if user is None or session_row is None:
+                return None
+            return byok_session_service.decrypt_token_for_request(user, session_row)
+    except BYOKDecryptionError:
+        # Common path: status='absent' or session has no BYOK wraps.
+        # Not an error — the user just doesn't have BYOK on this session.
+        return None
+    except BYOKConfigurationError:
+        logger.exception("BYOK token resolution failed: master key misconfigured (user=%s)", current_user.id)
+        return None
+
 
 # Event types that indicate the turn reached a terminal state. A replay
 # that ends with one of these needs no further ``interrupted`` marker —
@@ -41,6 +80,7 @@ async def chat(
     Returns an SSE stream with events: ``conversation_id``, ``token``,
     ``tool_start``, ``tool_result``, ``done``, and ``error``.
     """
+    byok_token = await _resolve_byok_token(current_user)
     return EventSourceResponse(
         run_chat(
             body.message,
@@ -48,6 +88,7 @@ async def chat(
             user_id=current_user.id,
             user_background=current_user.background,
             detail_level=body.detail_level,
+            byok_token=byok_token,
         )
     )
 
