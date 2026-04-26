@@ -1,23 +1,21 @@
 """Tests for the user feedback feature.
 
-Schema-level validation runs with plain Pydantic.  Service-level tests
-use an in-memory SQLite engine (same pattern as
-``test_admin_event_service``) so the suite runs without Postgres.
+Schema-level validation runs with plain Pydantic. Service-level tests
+use the session-scoped Postgres ``db_session`` fixture from
+``conftest.py``.
 """
 
 from __future__ import annotations
 
 import base64
-import uuid
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import ColumnDefault, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base
 from app.models.user import User
-from app.models.user_feedback import UserFeedback  # noqa: F401 — register table
+from app.models.user_feedback import UserFeedback
 from app.schemas.feedback import (
     FeedbackReplyRequest,
     FeedbackSubmitRequest,
@@ -62,28 +60,6 @@ class TestReplyRequestValidation:
     def test_rejects_short_body(self) -> None:
         with pytest.raises(ValidationError):
             FeedbackReplyRequest.model_validate({"body": "hi"})
-
-
-@pytest.fixture
-async def db_session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-
-    for table in Base.metadata.tables.values():
-        for col in table.columns:
-            if col.server_default is not None and "gen_random_uuid" in str(getattr(col.server_default, "arg", "")):
-                col.server_default = None
-                col.default = ColumnDefault(uuid.uuid4)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as session:
-        yield session
-    await engine.dispose()
 
 
 async def _seed_user(db: AsyncSession, *, email: str = "user@example.com", is_admin: bool = False) -> User:

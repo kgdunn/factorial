@@ -1,7 +1,8 @@
-"""Unit tests for ``app.services.share_service`` against an in-memory SQLite.
+"""Unit tests for ``app.services.share_service``.
 
 Covers token uniqueness, revoke behaviour, expiry handling, and the
-atomic ``view_count`` increment in ``resolve_public_share``.
+atomic ``view_count`` increment in ``resolve_public_share``. Uses the
+session-scoped Postgres ``db_session`` fixture from ``conftest.py``.
 """
 
 from __future__ import annotations
@@ -10,39 +11,11 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base
-from app.models.experiment import Experiment  # noqa: F401 — register table
+from app.models.experiment import Experiment
 from app.models.experiment_share import ExperimentShare
-from app.models.user import User  # noqa: F401 — register table
 from app.services import share_service
-
-
-@pytest.fixture
-async def db_session():
-    from sqlalchemy import ColumnDefault  # noqa: PLC0415
-
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-
-    # Replace PG-side ``gen_random_uuid()`` defaults with a Python-side
-    # ``uuid.uuid4`` so SQLite can fill PK columns without the extension.
-    for table in Base.metadata.tables.values():
-        for col in table.columns:
-            if col.server_default is not None and "gen_random_uuid" in str(getattr(col.server_default, "arg", "")):
-                col.server_default = None
-                col.default = ColumnDefault(uuid.uuid4)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as session:
-        yield session
-    await engine.dispose()
 
 
 async def _make_experiment(session: AsyncSession, owner_id: uuid.UUID) -> Experiment:
