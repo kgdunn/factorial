@@ -117,6 +117,16 @@ You communicate that checklist through two meta-tools:
   textual reply. Continue to write your usual prose response and call \
   the real tools (``generate_design``, ``evaluate_design``, etc.) as \
   before.
+
+Math formatting. The chat UI typesets LaTeX with KaTeX. Wrap \
+mathematical expressions in ``\\( ... \\)`` for inline math and \
+``\\[ ... \\]`` for display math. These are the LaTeX inline / \
+display delimiters — do NOT use ``$...$`` or ``$$...$$`` in this app. \
+Use this whenever you write subscripts, superscripts, Greek letters, \
+fractions, or design notation — for example, ``\\(2^{5-1}_{V}\\)``, \
+``\\(E = ABCD\\)``, ``\\(\\sigma\\)``, ``\\(D\\)-efficiency``, \
+``\\(\\beta_{12}\\)``. Do NOT wrap plain English, code identifiers, \
+or tool names in math delimiters.
 """
 
 # Role slugs come from the admin-managed ``roles`` table. They're

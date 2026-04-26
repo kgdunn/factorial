@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { marked } from 'marked';
-  import DOMPurify from 'dompurify';
   import type { ChatMessage } from '$lib/types';
   import { chatState } from '$lib/state/chat.svelte';
+  import { renderMarkdown } from '$lib/markdown';
   import PlanChecklist from './PlanChecklist.svelte';
   import ToolResultCard from './ToolResultCard.svelte';
 
@@ -17,13 +16,6 @@
     isLastAssistant = false,
     isStreaming = false,
   }: Props = $props();
-
-  marked.setOptions({ async: false, breaks: true });
-
-  function renderMarkdown(text: string): string {
-    const raw = marked.parse(text) as string;
-    return DOMPurify.sanitize(raw);
-  }
 
   let isUser = $derived(message.role === 'user');
   let showCursor = $derived(isLastAssistant && isStreaming);
