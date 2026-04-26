@@ -307,7 +307,10 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    print(f"  api_key prefix   : {api_key[:10]}…{api_key[-4:]}", file=sys.stderr)
+    # Don't echo any portion of the key, even a prefix or suffix —
+    # CodeQL's clear-text-logging rule (and good hygiene) forbids it.
+    # The length is enough to confirm "the variable is set".
+    print(f"  api_key          : present ({len(api_key)} chars)", file=sys.stderr)
 
     # ---------- tool specs ----------
     tool_names: list[str] | None = None
