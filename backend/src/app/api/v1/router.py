@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     admin_feedback,
     admin_users,
     auth,
+    byok,
     chat,
     designs,
     experiments,
@@ -81,6 +82,7 @@ api_v1_router.include_router(
     dependencies=_auth,
 )
 api_v1_router.include_router(feedback.router, prefix="/feedback", tags=["feedback"], dependencies=_auth)
+api_v1_router.include_router(byok.router, prefix="/byok", tags=["byok"], dependencies=_auth)
 
 # Hosted MCP endpoint: off by default. Mounts only when operators
 # explicitly enable it. Auth + per-identity CPU budget + rate limit
