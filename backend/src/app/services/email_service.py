@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from email.message import EmailMessage
+from email.utils import formataddr
 
 import aiosmtplib
 
@@ -32,7 +33,7 @@ async def send_email(
         return
 
     msg = EmailMessage()
-    msg["From"] = settings.smtp_from_email
+    msg["From"] = formataddr((settings.smtp_from_name, settings.smtp_from_email))
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(html_body, subtype="html")

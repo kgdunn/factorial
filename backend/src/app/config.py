@@ -158,6 +158,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from_email: str = ""
+    smtp_from_name: str = "Factorial Platform"
     smtp_use_tls: bool = True
 
     # Signup approval / setup tokens
