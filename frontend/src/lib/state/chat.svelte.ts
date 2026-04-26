@@ -66,6 +66,14 @@ class ChatState {
    * even when no plan was recorded.
    */
   currentPhase = $state<PhaseState | null>(null);
+  /**
+   * True iff at least one persisted Message in the loaded conversation
+   * was billed against the user's own Anthropic key (BYOK). Surfaced
+   * as a small "using your own key" pill above the message list.
+   * Loaded from /messages.byok_used; reset on clear/load of a different
+   * conversation.
+   */
+  byokUsed = $state(false);
 
   private abortController: AbortController | null = null;
   private lastUserMessage: string | null = null;
@@ -161,6 +169,7 @@ class ChatState {
     this.lastEventId = null;
     this.resumeAttempts = 0;
     this.currentPhase = null;
+    this.byokUsed = false;
   }
 
   /** Load an existing conversation's messages (for "return to chat" flow). */
@@ -171,6 +180,7 @@ class ChatState {
     try {
       const resp = await fetchConversationMessages(conversationId);
       this.conversationId = resp.conversation_id;
+      this.byokUsed = resp.byok_used;
       this.messages = resp.messages.map((m: ChatMessage) => ({
         ...m,
         timestamp: m.timestamp ? new Date(m.timestamp as unknown as string) : new Date(),

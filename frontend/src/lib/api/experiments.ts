@@ -97,7 +97,12 @@ export async function fetchResults(id: string): Promise<ResultsResponse> {
 
 export async function fetchConversationMessages(
   conversationId: string,
-): Promise<{ conversation_id: string; title: string; messages: ChatMessage[] }> {
+): Promise<{
+  conversation_id: string;
+  title: string;
+  messages: ChatMessage[];
+  byok_used: boolean;
+}> {
   const resp = await authFetch(`/api/v1/chat/${conversationId}/messages`);
   if (!resp.ok) throw new Error(`Failed to fetch messages: ${resp.status}`);
   return resp.json();

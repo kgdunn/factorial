@@ -138,6 +138,15 @@
       </div>
     {:else}
       <div class="mx-auto flex max-w-3xl flex-col gap-2">
+        {#if chatState.byokUsed}
+          <div
+            class="mb-2 inline-flex w-fit items-center gap-1.5 self-start rounded-full border border-rule-soft bg-paper-2 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-soft"
+            title="This conversation uses your own Anthropic API key — no platform markup applied."
+          >
+            <span aria-hidden="true">⌁</span>
+            <span>using your own key</span>
+          </div>
+        {/if}
         {#each chatState.messages as message, i (message.id)}
           <MessageBubble
             {message}
