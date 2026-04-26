@@ -8,7 +8,14 @@ from app.db.base import Base
 
 config = context.config
 
-if config.config_file_name is not None:
+# Skip Alembic's own logging setup when invoked programmatically with a
+# URL override (i.e. by ``backend/tests/conftest.py``). ``fileConfig``
+# defaults to ``disable_existing_loggers=True``, which would silence the
+# app's loggers — including ``caplog`` capture in unrelated tests. CLI
+# invocations (``make migrate``, plain ``alembic upgrade head``) keep
+# the standard alembic.ini-driven logging.
+_url_override = config.get_main_option("sqlalchemy.url")
+if _url_override is None and config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
@@ -22,7 +29,7 @@ def _resolve_url() -> str:
     back to the production ``database_url_sync``. Keeps ``make migrate``
     and a bare ``alembic upgrade head`` working unchanged.
     """
-    return config.get_main_option("sqlalchemy.url") or settings.database_url_sync
+    return _url_override or settings.database_url_sync
 
 
 def run_migrations_offline() -> None:

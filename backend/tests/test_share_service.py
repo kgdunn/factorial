@@ -15,10 +15,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.experiment import Experiment
 from app.models.experiment_share import ExperimentShare
+from app.models.user import User
 from app.services import share_service
 
 
+async def _make_user(session: AsyncSession, user_id: uuid.UUID) -> User:
+    user = User(
+        id=user_id,
+        email=f"u-{user_id.hex[:8]}@example.com",
+        password_hash="x",  # noqa: S106 — fixture-only
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
 async def _make_experiment(session: AsyncSession, owner_id: uuid.UUID) -> Experiment:
+    await _make_user(session, owner_id)
     exp = Experiment(
         id=uuid.uuid4(),
         name="Test",
