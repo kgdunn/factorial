@@ -130,14 +130,20 @@ _ALLOWED_BACKGROUND_RE = re.compile(r"^[a-z0-9_]{1,50}$")
 # ---------------------------------------------------------------------------
 
 
-def get_anthropic_client() -> anthropic.Anthropic:
+def get_anthropic_client(api_key: str | None = None) -> anthropic.Anthropic:
     """Create a synchronous Anthropic client.
 
-    Raises ``RuntimeError`` when the API key is not configured.
+    When ``api_key`` is provided (BYOK path), it is used directly and
+    the call to Anthropic is billed against that key — no platform
+    markup. When ``None``, falls back to ``settings.anthropic_api_key``
+    (platform key, with markup).
+
+    Raises ``RuntimeError`` when neither path produces a usable key.
     """
-    if not settings.anthropic_api_key:
+    key = api_key or settings.anthropic_api_key
+    if not key:
         raise RuntimeError("ANTHROPIC_API_KEY is not configured")  # noqa: TRY003
-    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    return anthropic.Anthropic(api_key=key)
 
 
 # ---------------------------------------------------------------------------
