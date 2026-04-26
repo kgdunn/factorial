@@ -63,10 +63,7 @@ class Session(Base):
     )
 
     user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    ip: Mapped[str | None] = mapped_column(
-        String(45).with_variant(INET(), "postgresql"),
-        nullable=True,
-    )
+    ip: Mapped[str | None] = mapped_column(INET(), nullable=True)
 
     # BYOK: per-session DEK wrap. Populated only if the session belongs
     # to a user who has an active BYOK enrollment. ``byok_session_key_encrypted``

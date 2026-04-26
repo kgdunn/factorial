@@ -1,21 +1,19 @@
 """Tests for the DB-aware lifecycle helpers in ``byok_session_service``.
 
 Covers ``enroll`` / ``disable`` / ``mark_verified`` / ``mark_rejected`` /
-``record_history`` against an in-memory SQLite session — the same
-pattern as ``test_feedback`` and ``test_admin_event_service``.
+``record_history`` against the shared transactional Postgres
+``db_session`` fixture (see ``conftest.py``).
 """
 
 from __future__ import annotations
 
 import base64
-import uuid
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import ColumnDefault, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base
 from app.models.byok_credentials_history import BYOKCredentialsHistory
 from app.models.user import User
 from app.services import byok_service, byok_session_service
@@ -28,27 +26,6 @@ from app.services.byok_session_service import (
 _PASSWORD = "hunter2"
 _KEY = "sk-ant-api03-USERKEY"
 _KEY_ALT = "sk-ant-api03-ANOTHER"
-
-
-@pytest.fixture
-async def db_session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-    for table in Base.metadata.tables.values():
-        for col in table.columns:
-            if col.server_default is not None and "gen_random_uuid" in str(getattr(col.server_default, "arg", "")):
-                col.server_default = None
-                col.default = ColumnDefault(uuid.uuid4)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as session:
-        yield session
-    await engine.dispose()
 
 
 @pytest.fixture

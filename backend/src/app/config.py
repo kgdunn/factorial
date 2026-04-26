@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
 
+    # PostgreSQL — test database. Used only when ``app_env == "testing"``;
+    # ``backend/tests/conftest.py`` connects here, runs Alembic migrations
+    # once per session, and wraps each test in a transaction that rolls
+    # back at teardown. Provisioned by the ``postgres-test`` service in
+    # docker-compose.yml (port 5433) and by ``services: postgres`` on the
+    # CI ``test`` job.
+    postgres_test_user: str = "doe_user"
+    postgres_test_password: str = "doe_password"
+    postgres_test_db: str = "doe_test_db"
+    postgres_test_host: str = "localhost"
+    postgres_test_port: int = 5433
+
     @property
     def database_url(self) -> str:
         return (
@@ -42,6 +54,22 @@ class Settings(BaseSettings):
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def database_url_test(self) -> str:
+        """Async URL for the test Postgres (asyncpg)."""
+        return (
+            f"postgresql+asyncpg://{self.postgres_test_user}:{self.postgres_test_password}"
+            f"@{self.postgres_test_host}:{self.postgres_test_port}/{self.postgres_test_db}"
+        )
+
+    @property
+    def database_url_test_sync(self) -> str:
+        """Sync URL for the test Postgres (psycopg2). Used by Alembic."""
+        return (
+            f"postgresql+psycopg2://{self.postgres_test_user}:{self.postgres_test_password}"
+            f"@{self.postgres_test_host}:{self.postgres_test_port}/{self.postgres_test_db}"
         )
 
     # Neo4j

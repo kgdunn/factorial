@@ -83,6 +83,12 @@ format:
 	cd backend && uv run --extra dev ruff format src/ tests/
 
 test:
+	@pg_isready -h $${POSTGRES_TEST_HOST:-localhost} -p $${POSTGRES_TEST_PORT:-5433} -q || { \
+	    echo "ERROR: test Postgres is not reachable on $${POSTGRES_TEST_HOST:-localhost}:$${POSTGRES_TEST_PORT:-5433}."; \
+	    echo "Start it with:  docker compose up -d postgres-test"; \
+	    echo "(See docs/development/testing-database.md for the full workflow.)"; \
+	    exit 1; \
+	}
 	cd backend && APP_ENV=testing uv run --extra dev pytest tests/ -v --tb=short
 
 migrate:

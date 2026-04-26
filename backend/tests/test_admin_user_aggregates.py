@@ -2,50 +2,17 @@
 
 from __future__ import annotations
 
-import uuid
 from decimal import Decimal
 
-import pytest
-from sqlalchemy import ColumnDefault
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base
-
-# Importing all models so SQLite creates every table the aggregation query needs.
-from app.models.admin_event import AdminEvent  # noqa: F401
-from app.models.conversation import ChatEvent, Conversation, Message, ToolCall  # noqa: F401
+from app.models.conversation import Conversation
 from app.models.experiment import Experiment
-from app.models.experiment_share import ExperimentShare  # noqa: F401
-from app.models.role import Role  # noqa: F401
-from app.models.setup_token import SetupToken  # noqa: F401
 from app.models.signup_request import SignupRequest
-from app.models.tool_usage import ToolUsage  # noqa: F401
 from app.models.user import User
 from app.models.user_balance import UserBalance
 from app.models.user_feedback import UserFeedback
 from app.services import admin_service
-
-
-@pytest.fixture
-async def db_session():
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-
-    for table in Base.metadata.tables.values():
-        for col in table.columns:
-            if col.server_default is not None and "gen_random_uuid" in str(getattr(col.server_default, "arg", "")):
-                col.server_default = None
-                col.default = ColumnDefault(uuid.uuid4)
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as session:
-        yield session
-    await engine.dispose()
 
 
 async def test_list_users_returns_zeroed_aggregates_for_new_user(db_session: AsyncSession) -> None:

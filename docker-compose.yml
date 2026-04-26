@@ -130,6 +130,33 @@ services:
       timeout: 5s
       retries: 5
 
+  # Dedicated Postgres for the backend test suite. Lives on a separate
+  # port (5433) and database (doe_test_db) so test runs can never touch
+  # the dev Postgres on 5432. The backend `app` service does NOT depend
+  # on it — it is brought up explicitly by developers and CI.
+  #
+  #   docker compose up -d postgres-test
+  #   make test
+  #
+  # Configuration matches POSTGRES_TEST_* in .env.example. CI provisions
+  # an equivalent service via .github/workflows/ci-backend.yml.
+  postgres-test:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_TEST_USER:-doe_user}
+      POSTGRES_PASSWORD: ${POSTGRES_TEST_PASSWORD:-doe_password}
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-doe_test_db}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_TEST_USER:-doe_user} -d ${POSTGRES_TEST_DB:-doe_test_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   neo4j:
     image: neo4j:5-community
     restart: unless-stopped
@@ -163,5 +190,6 @@ services:
 
 volumes:
   postgres_data:
+  postgres_test_data:
   neo4j_data:
   # redis_data:
