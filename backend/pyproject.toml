@@ -33,7 +33,7 @@ dependencies = [
     "maxminddb>=2.6.0",
     "sqladmin>=0.20.0",
     "itsdangerous>=2.2.0",
-    "cryptography>=44.0",
+    "cryptography>=47.0.0",
     "argon2-cffi>=23.1",
 ]
 
