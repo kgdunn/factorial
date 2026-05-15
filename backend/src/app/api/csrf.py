@@ -23,7 +23,9 @@ CSRF_COOKIE_NAME = "factorial_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"
 
 # Methods that require CSRF protection. GET/HEAD/OPTIONS are read-only and
-# CSRF-safe; SSE chat is a GET, exempt by design.
+# CSRF-safe (the SSE chat *resume* endpoint is one such GET). The live chat
+# stream POSTs to /api/v1/chat and is CSRF-protected like any other
+# state-changing call.
 _PROTECTED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
