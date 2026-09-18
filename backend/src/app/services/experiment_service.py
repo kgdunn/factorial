@@ -145,7 +145,10 @@ async def add_results(
     """Merge new results into the experiment's ``results_data``.
 
     Uses ``run_index`` as the merge key: existing rows are updated,
-    new rows are appended.  Supports incremental entry.
+    new rows are added.  The merged list is re-sorted by
+    ``run_index`` before being written back, so a new row lands
+    wherever its index places it in the ordering (not necessarily at
+    the end).  Supports incremental entry.
 
     Each row is stored as-is, so optional per-data-point metadata
     keys like ``notes`` (str) and ``included`` (bool, default ``true``

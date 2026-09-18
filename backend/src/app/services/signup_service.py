@@ -100,8 +100,9 @@ async def approve_signup(
     Raises
     ------
     ValueError
-        Signup not found, not pending, both role arguments given, or
-        neither given.
+        Signup not found, not pending, both role arguments given,
+        neither given, or the supplied ``role_id`` does not resolve to
+        an existing role.
     """
     if role_id is not None and new_role_name is not None:
         raise ValueError("Pass either role_id or new_role, not both")  # noqa: TRY003

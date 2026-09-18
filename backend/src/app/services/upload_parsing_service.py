@@ -59,7 +59,10 @@ def parse_upload(
     them without touching the global settings object.
 
     Raises :class:`UploadValidationError` for any user-actionable
-    failure (oversized, unsupported extension, malformed, non-rectangular).
+    failure (oversized, unsupported extension, malformed, or empty
+    after trimming). Ragged rows are right-padded to the widest row
+    inside :func:`_normalise`, so a "non-rectangular" outcome never
+    reaches the caller.
     """
 
     if max_bytes is None or max_cells is None:
@@ -174,7 +177,12 @@ def _parse_csv(content: bytes) -> list[list[Any]]:
 
 
 def _decode_csv(content: bytes) -> str:
-    """Decode bytes as UTF-8 (with BOM tolerance), falling back to latin-1."""
+    """Decode bytes as UTF-8 (with BOM tolerance), falling back to latin-1.
+
+    ``bytes.decode("latin-1")`` cannot raise for any byte sequence, so
+    the ``UnicodeDecodeError`` re-raise below is defensive only and is
+    not reachable in practice.
+    """
 
     try:
         return content.decode("utf-8-sig")

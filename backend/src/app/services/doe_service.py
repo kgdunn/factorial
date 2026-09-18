@@ -36,7 +36,9 @@ async def call_tool(tool_name: str, tool_input: dict[str, Any]) -> dict[str, Any
     ------
     ToolExecutionError
         If the tool returns an ``{"error": ...}`` dict, times out,
-        breaks an input-size limit, or the worker subprocess dies.
+        breaks an input-size limit, exceeds the per-subprocess memory
+        cap (``ToolMemoryExceededError`` from the process-improve
+        ``_PISafetyMemory`` guard), or the worker subprocess dies.
     """
     result, _duration = await execute_tool_call_async(tool_name, tool_input)
 
