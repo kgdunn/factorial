@@ -100,10 +100,10 @@ class Message(Base):
     """A single message (or content block) within a conversation.
 
     Stores user text, assistant text, tool_use blocks, and tool_result
-    entries.  The ``sequence`` column determines ordering.  Tool-related
-    fields (``tool_use_id``, ``tool_name``, ``tool_input``) are populated
-    for assistant tool_use blocks and their corresponding tool_result
-    entries.
+    entries.  The ``sequence`` column determines ordering.  Assistant
+    ``tool_use`` blocks populate ``tool_use_id``, ``tool_name`` and
+    ``tool_input``; the matching ``tool_result`` rows populate only
+    ``tool_use_id`` (their ``tool_name`` and ``tool_input`` stay NULL).
     """
 
     __tablename__ = "messages"

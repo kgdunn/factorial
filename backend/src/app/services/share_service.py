@@ -116,8 +116,9 @@ async def resolve_public_share(
 ) -> tuple[ExperimentShare, Experiment] | None:
     """Look up a share by token and return it alongside the experiment.
 
-    Returns None when the token is unknown, revoked, or expired.  On
-    success, atomically increments ``view_count``.
+    Returns None when the token is unknown, revoked, expired, or when
+    the linked :class:`Experiment` row no longer exists.  On success,
+    atomically increments ``view_count``.
     """
     result = await db.execute(select(ExperimentShare).where(ExperimentShare.token == token))
     share = result.scalar_one_or_none()

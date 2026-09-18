@@ -42,8 +42,12 @@ async def chat(
     """Start or continue a conversation with the DOE agent.
 
     Accepts a user message and optional ``conversation_id``.
-    Returns an SSE stream with events: ``conversation_id``, ``token``,
-    ``tool_start``, ``tool_result``, ``done``, and ``error``.
+    Returns an SSE stream with events: ``conversation_id``, ``phase``,
+    ``token``, ``plan``, ``plan_update``, ``tool_start``, ``tool_result``,
+    ``experiment_created``, ``simulator_created``, ``done``, and
+    ``error``. On the ``/resume`` endpoint a synthetic ``interrupted``
+    event may also be emitted when the persisted stream ended without a
+    terminal event.
     """
     return EventSourceResponse(
         run_chat(

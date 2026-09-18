@@ -315,8 +315,9 @@ def render_literate_markdown(
     """Emit a markdown walkthrough with fenced ``python`` code blocks.
 
     Prose explains each step; the code inside the blocks is identical
-    byte-for-byte to what the notebook cells and the ``.py`` script
-    emit (same ``_step_blocks`` source).
+    byte-for-byte to what the notebook cells emit — both renderers
+    share ``_step_blocks``. The ``.py`` script renderer re-implements
+    the same formatting inline rather than calling ``_step_blocks``.
     """
     if not calls:
         raise ValueError("no analysis tool calls available for this experiment")
