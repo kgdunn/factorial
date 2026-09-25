@@ -178,8 +178,10 @@ async def attach_evaluation(
 ) -> Experiment | None:
     """Overwrite ``evaluation_data`` on an experiment.
 
-    Used both by the agent loop (when ``evaluate_design`` runs right after
-    ``generate_design``) and by the REST re-evaluate endpoint.
+    Called by the REST re-evaluate endpoint (``POST
+    /experiments/{id}/evaluate``). The chat agent loop writes
+    ``evaluation_data`` directly onto the freshly created Experiment
+    within its own transaction instead of routing through this helper.
     """
     experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:

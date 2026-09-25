@@ -239,11 +239,15 @@ class ToolCall(Base):
 class ChatEvent(Base):
     """Append-only log of SSE events emitted during an agent turn.
 
-    Every event the chat stream yields (``conversation_id``, ``token``,
-    ``tool_start``, ``tool_result``, ``experiment_created``, ``done``,
-    ``error``) is persisted here so that a client which drops its SSE
-    connection can reconnect with ``Last-Event-ID`` and replay anything
-    it missed. Rows are scoped by ``turn_id`` — one UUID per
+    Every event the chat stream yields (``conversation_id``, ``phase``,
+    ``token``, ``plan``, ``plan_update``, ``tool_start``,
+    ``tool_result``, ``experiment_created``, ``simulator_created``,
+    ``done``, and ``error``) is persisted here so that a client which
+    drops its SSE connection can reconnect with ``Last-Event-ID`` and
+    replay anything it missed. The synthetic ``interrupted`` marker
+    emitted by the resume endpoint is deliberately NOT persisted —
+    it is synthesised on read when the last row for a turn is
+    non-terminal. Rows are scoped by ``turn_id`` — one UUID per
     ``run_chat`` invocation — and ordered by the monotonic per-turn
     ``sequence`` column.
     """
