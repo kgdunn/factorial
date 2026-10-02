@@ -109,7 +109,12 @@ async def update_experiment(
     updates: dict[str, Any],
     user_id: uuid.UUID,
 ) -> Experiment | None:
-    """Update experiment fields. Returns None if not found or not owned."""
+    """Update experiment fields. Returns None if not found or not owned.
+
+    Keys in ``updates`` whose value is ``None`` are skipped — the
+    helper never clears a field by passing ``None``. Pass an empty
+    string / empty list / explicit sentinel to blank a field.
+    """
     experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:
         return None
@@ -178,8 +183,11 @@ async def attach_evaluation(
 ) -> Experiment | None:
     """Overwrite ``evaluation_data`` on an experiment.
 
-    Used both by the agent loop (when ``evaluate_design`` runs right after
-    ``generate_design``) and by the REST re-evaluate endpoint.
+    Called from the REST re-evaluate endpoint
+    (``POST /experiments/{id}/evaluate``). The agent loop writes
+    ``evaluation_data`` directly on the ORM object after a successful
+    ``evaluate_design`` tool call, so it does not go through this
+    helper.
     """
     experiment = await _get_owned_experiment(db, experiment_id, user_id)
     if not experiment:
