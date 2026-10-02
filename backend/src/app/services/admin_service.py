@@ -80,8 +80,10 @@ async def create_admin_shell(db: AsyncSession, email: str, display_name: str | N
 async def set_admin(db: AsyncSession, user: User, is_admin: bool) -> User:
     """Toggle ``is_admin`` on a user.
 
-    Refuses to demote the last remaining admin so the system can't lock
-    itself out.
+    Refuses to demote the last remaining admin (active or inactive) so
+    the system can't lock itself out. The guard counts admins by
+    ``is_admin`` alone; whether that admin is currently active does
+    not relax the check.
     """
     if user.is_admin and not is_admin:
         remaining = await count_admins(db)
@@ -135,9 +137,12 @@ async def _aggregate_for_users(
 ) -> dict[uuid.UUID, UserAggregates]:
     """Batch-fetch per-user rollups for the given page of users.
 
-    Runs five small grouped queries (one per related table) rather than
-    N+1 subqueries per user. Works on both PostgreSQL (production) and
-    SQLite (tests) — no dialect-specific lateral joins.
+    Runs four small grouped queries (one per related table:
+    ``conversations``, ``user_feedback``, ``experiments``,
+    ``signup_requests``) rather than N+1 subqueries per user.
+    Dialect-neutral — no lateral joins or JSON SQL functions — so
+    the same code paths exercise production (PostgreSQL) and the
+    test Postgres database the suite runs against.
     """
     if not users:
         return {}
@@ -212,7 +217,12 @@ async def _aggregate_for_users(
 
 
 async def set_active(db: AsyncSession, user: User, is_active: bool) -> User:
-    """Enable or disable a user. Won't deactivate the last remaining admin."""
+    """Enable or disable a user.
+
+    Won't deactivate the last remaining admin (active or inactive) —
+    the guard counts admins by ``is_admin`` alone, so the check
+    applies even if that admin is already inactive.
+    """
     if user.is_admin and not is_active:
         remaining = await count_admins(db)
         if remaining <= 1:
