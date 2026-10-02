@@ -55,7 +55,20 @@ def calculate_cost(
     input_tokens: int,
     output_tokens: int,
 ) -> dict[str, Decimal | bool]:
-    """Snapshot the rates, costs, markup, and billable amount for a call."""
+    """Snapshot the rates, costs, markup, and billable amount for a call.
+
+    The returned dict carries, among other keys:
+
+    - ``raw_cost_usd`` — ``input_cost + output_cost``, what Anthropic
+      charges us for this call.
+    - ``markup_rate`` — the markup multiplier in force (e.g. ``0.50``
+      for a 1.5x markup).
+    - ``markup_cost_usd`` — the **total** billable amount
+      (``raw_cost * (1 + markup_rate)``), not the markup portion
+      alone. The field name is kept for schema compatibility with
+      rows already persisted on ``Message``.
+    - ``billable_to_user_usd`` — alias for ``markup_cost_usd``.
+    """
     input_rate, output_rate = lookup_rates(model)
     input_cost = (Decimal(input_tokens) * input_rate) / _MTOK
     output_cost = (Decimal(output_tokens) * output_rate) / _MTOK
