@@ -47,10 +47,10 @@ def install_log_injection_guard() -> None:
     2. **Secret redaction**. Anthropic keys, generic ``Bearer`` /
        ``API-Key`` / ``Authorization`` / ``password`` patterns are
        replaced with ``[redacted]`` *before* the record reaches any
-       handler. The primary BYOK guarantee is that the token never
-       hits a logger argument in the first place — this is the
-       defence-in-depth backstop catching the case where a future
-       contributor logs a header dict verbatim.
+       handler. The primary guarantee is that tokens never hit a
+       logger argument in the first place — this is the defence-in-
+       depth backstop catching the case where a future contributor
+       logs a header dict verbatim.
 
     Idempotent: repeated calls are a no-op.
     """
