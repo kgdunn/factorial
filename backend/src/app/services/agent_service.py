@@ -511,11 +511,16 @@ async def run_chat(
     The DB session is managed inside the generator (not via ``Depends``)
     so its lifetime matches the SSE stream.
 
-    Every SSE event yielded by this generator carries an ``id:`` of the
-    form ``{turn_id}:{sequence}`` and is persisted to ``chat_events``
+    Once the conversation row has been resolved, every SSE event
+    routed through ``emit`` carries an ``id:`` of the form
+    ``{turn_id}:{sequence}`` and is persisted to ``chat_events``
     before being yielded, so a disconnected client can replay missed
     events via the resume endpoint using the standard SSE
-    ``Last-Event-ID`` header.
+    ``Last-Event-ID`` header. Pre-resolution error events (unknown
+    ``conversation_id``, failure to construct the Anthropic client,
+    the ``finally`` fallback on an unexpected exception) are emitted
+    directly as plain ``_sse`` calls and carry no ``id:`` — the
+    client has no turn to resume.
     """
     system_prompt = _build_system_prompt(user_background, detail_level)
 
