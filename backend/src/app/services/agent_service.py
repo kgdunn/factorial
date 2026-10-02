@@ -297,7 +297,18 @@ async def _persist_new_messages(
     new_messages: list[dict[str, Any]],
     start_sequence: int,
 ) -> dict[str, uuid.UUID]:
-    """Persist new assistant / tool_result messages.  Returns a map of tool_use_id -> Message.id."""
+    """Persist new assistant / tool_result messages.
+
+    Returns a map of ``tool_use_id`` → ``Message.id`` for the
+    assistant tool_use blocks seen in ``new_messages``. The ``Message``
+    primary key is server-generated (``server_default=gen_random_uuid()``
+    with no client default), so the stored values are the in-memory
+    ORM ``id`` attribute at ``db.add()`` time — i.e. ``None`` until
+    the session is flushed. The downstream call site passes the map
+    straight into ``_persist_tool_calls`` and ``ToolCall.message_id``
+    is already nullable, so the ``None``\\ s are harmless; a caller
+    that genuinely needs the real PK must flush first.
+    """
     seq = start_sequence
     tool_use_id_to_msg_id: dict[str, uuid.UUID] = {}
 
