@@ -89,7 +89,10 @@ async def export_public_experiment(
     format: ExportFormat = Query(..., description="Output format: pdf, xlsx, csv, md"),
     db: AsyncSession = Depends(get_db_session),
 ) -> Response:
-    """Stream an export of the shared experiment in the requested format.
+    """Return an export of the shared experiment in the requested format.
+
+    The payload is built in memory and returned as a plain
+    ``Response`` — not a chunked ``StreamingResponse``.
 
     Honours ``allow_results``: CSV and XLSX (which are primarily data
     payloads) return 403 when the owner disabled result sharing; PDF
