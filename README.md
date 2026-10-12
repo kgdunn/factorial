@@ -7,7 +7,7 @@
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-2.0+-FF3E00.svg)](https://kit.svelte.dev)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
-> **This is the open-source codebase behind [factori.al](https://factori.al)** — try it live, or clone the repo and self-host your own instance.
+> **Factorial now lives at [factori.al](https://factori.al/)**, a browser app built from [process-improve](https://github.com/kgdunn/process-improve/tree/main/web). This repository, the earlier server version, is archived.
 
 Conversational, LLM-assisted web application that helps users design, run, and analyze scientific experiments using Design of Experiments (DOE) methodology. The agent (powered by Claude) guides users through experimental design, executes statistical analyses, and presents interactive visualizations.
 
